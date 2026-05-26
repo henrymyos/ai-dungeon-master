@@ -186,10 +186,11 @@ export function DmChat({
 
       let pending = "";
       let scheduled = false;
-      // Track which assistant message we're appending to. When a tool fires,
-      // we close the current assistant card and start a new one for the
-      // text that follows.
+      // Track which assistant message we're appending to + the running
+      // accumulated text for the FINAL card so we can speak it later
+      // without reaching back into React state.
       let currentDmId = dmId;
+      let finalText = "";
       const flush = () => {
         if (!pending) {
           scheduled = false;
@@ -199,6 +200,7 @@ export function DmChat({
         pending = "";
         scheduled = false;
         const targetId = currentDmId;
+        finalText += t;
         setMessages((m) =>
           m.map((msg) =>
             msg.id === targetId && msg.kind === "msg"
@@ -278,6 +280,7 @@ export function DmChat({
               return out;
             });
             currentDmId = nextDmId;
+            finalText = "";
             if (toolEvt.kind === "set_scene" && ambient.isEnabled()) {
               ambient.setMood(toolEvt.mood);
             }
@@ -300,18 +303,11 @@ export function DmChat({
 
       if (streamErr) throw new Error(streamErr);
 
-      // Speak the final accumulated text from this turn (the last assistant
-      // card by id ordering — we collected it implicitly via setMessages).
-      if (ttsOn) {
-        setMessages((m) => {
-          const lastAsst = [...m]
-            .reverse()
-            .find((x) => x.kind === "msg" && x.role === "assistant");
-          if (lastAsst && lastAsst.kind === "msg" && lastAsst.content) {
-            speak(lastAsst.content);
-          }
-          return m;
-        });
+      // Speak the final accumulated text from this turn. Read state via
+      // localStorage rather than the captured `ttsOn` closure so toggling
+      // the speaker on/off during streaming takes effect.
+      if (isTtsEnabled() && finalText.trim().length > 0) {
+        speak(finalText);
       }
 
       onCampaignChanged?.();

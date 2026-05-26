@@ -3,12 +3,24 @@
 /**
  * Thin wrapper around the browser's free SpeechSynthesis API.
  *
- * Loads a voice preference from localStorage; on every `speak()` call,
- * picks the best available voice (prefers en-GB / en-AU / male voices
- * because they feel more "dungeon master" than the default en-US Siri).
+ * Voices populate asynchronously in some browsers (Chrome especially) —
+ * the first getVoices() call right after page load often returns []. We
+ * cache the voice list and refresh it on the `voiceschanged` event.
  */
 
 const STORAGE_KEY = "dm_tts_enabled";
+
+let _voices: SpeechSynthesisVoice[] = [];
+
+if (typeof window !== "undefined" && "speechSynthesis" in window) {
+  // Prime the voice list. Both reads — the initial one and the event —
+  // are necessary because browsers behave differently.
+  const refresh = () => {
+    _voices = window.speechSynthesis.getVoices();
+  };
+  refresh();
+  window.speechSynthesis.addEventListener("voiceschanged", refresh);
+}
 
 export function isTtsAvailable(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
@@ -16,9 +28,7 @@ export function isTtsAvailable(): boolean {
 
 export function isTtsEnabled(): boolean {
   if (!isTtsAvailable()) return false;
-  const v = window.localStorage.getItem(STORAGE_KEY);
-  // Default OFF — auto-play would surprise visitors. They opt in.
-  return v === "1";
+  return window.localStorage.getItem(STORAGE_KEY) === "1";
 }
 
 export function setTtsEnabled(on: boolean) {
@@ -27,11 +37,16 @@ export function setTtsEnabled(on: boolean) {
 }
 
 function pickVoice(): SpeechSynthesisVoice | null {
-  const voices = window.speechSynthesis.getVoices();
+  // Use the cached list if populated; fall back to a fresh read.
+  let voices = _voices;
+  if (voices.length === 0 && isTtsAvailable()) {
+    voices = window.speechSynthesis.getVoices();
+    _voices = voices;
+  }
   if (voices.length === 0) return null;
   const prefs = [
     /Google UK English Male/i,
-    /Daniel/i, // macOS UK male
+    /Daniel/i,
     /Microsoft Ryan|Liam|Arthur/i,
     /en-GB/i,
     /en-AU/i,
@@ -49,13 +64,8 @@ export function cancelSpeech() {
   window.speechSynthesis.cancel();
 }
 
-export function speak(text: string) {
-  if (!isTtsAvailable() || !isTtsEnabled()) return;
-  // Cancel anything currently speaking — we never want overlap.
-  window.speechSynthesis.cancel();
-
-  // Strip markdown formatting that doesn't translate to speech.
-  const clean = text
+function stripMarkdown(text: string): string {
+  return text
     .replace(/\*\*(.+?)\*\*/g, "$1")
     .replace(/\*(.+?)\*/g, "$1")
     .replace(/^#+\s*/gm, "")
@@ -63,12 +73,11 @@ export function speak(text: string) {
     .replace(/\[(.+?)\]\(.+?\)/g, "$1")
     .replace(/\s+/g, " ")
     .trim();
-  if (!clean) return;
+}
 
-  // Some browsers limit per-utterance length; chunk on sentence boundaries.
-  const chunks = clean.match(/[^.!?]+[.!?]+/g) ?? [clean];
-
+function enqueue(text: string) {
   const voice = pickVoice();
+  const chunks = text.match(/[^.!?]+[.!?]+/g) ?? [text];
   for (const chunk of chunks) {
     const u = new SpeechSynthesisUtterance(chunk);
     if (voice) u.voice = voice;
@@ -76,4 +85,32 @@ export function speak(text: string) {
     u.pitch = 0.95;
     window.speechSynthesis.speak(u);
   }
+}
+
+export function speak(text: string) {
+  if (!isTtsAvailable() || !isTtsEnabled()) return;
+  const clean = stripMarkdown(text);
+  if (!clean) return;
+
+  window.speechSynthesis.cancel();
+
+  // If voices haven't loaded yet, wait one tick on `voiceschanged`.
+  if (_voices.length === 0) {
+    const handler = () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", handler);
+      _voices = window.speechSynthesis.getVoices();
+      enqueue(clean);
+    };
+    window.speechSynthesis.addEventListener("voiceschanged", handler);
+    // Belt-and-braces: also enqueue after a small delay in case the event
+    // never fires (some browsers populate voices synchronously after a
+    // microtask).
+    setTimeout(() => {
+      window.speechSynthesis.removeEventListener("voiceschanged", handler);
+      enqueue(clean);
+    }, 250);
+    return;
+  }
+
+  enqueue(clean);
 }
