@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { DmChat } from "@/components/dm-chat";
 import { Sidebar } from "@/components/sidebar";
 import { ToastProvider, useToast } from "@/components/toast";
-import type { DmCampaign } from "@/lib/db";
+import type { DmCampaign, DmCharacter } from "@/lib/db";
+import type { ToolEvent } from "@/lib/tools";
 
 function PageInner() {
   const [campaigns, setCampaigns] = useState<DmCampaign[]>([]);
@@ -12,6 +13,7 @@ function PageInner() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [character, setCharacter] = useState<DmCharacter | null>(null);
   const toast = useToast();
 
   const refresh = useCallback(async () => {
@@ -22,8 +24,18 @@ function PageInner() {
     return campaigns;
   }, []);
 
-  // First load — fetch the list, and auto-select the most recent campaign
-  // so visitors land somewhere meaningful instead of an empty state.
+  const fetchCharacter = useCallback(async (campaignId: string) => {
+    const res = await fetch(`/api/campaigns/${campaignId}/character`, {
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      setCharacter(null);
+      return;
+    }
+    const { character } = (await res.json()) as { character: DmCharacter };
+    setCharacter(character);
+  }, []);
+
   useEffect(() => {
     (async () => {
       const list = await refresh();
@@ -31,6 +43,11 @@ function PageInner() {
       setLoading(false);
     })();
   }, [refresh]);
+
+  useEffect(() => {
+    if (activeId) fetchCharacter(activeId);
+    else setCharacter(null);
+  }, [activeId, fetchCharacter]);
 
   async function newCampaign() {
     if (creating) return;
@@ -63,6 +80,36 @@ function PageInner() {
     }
   }
 
+  function onToolEvent(evt: ToolEvent) {
+    // Apply mutations to local character state so the sidebar feels live
+    // instead of waiting on the post-stream refetch.
+    setCharacter((prev) => {
+      if (!prev) return prev;
+      if (evt.kind === "update_hp")
+        return { ...prev, hp: evt.hp, max_hp: evt.max_hp };
+      if (evt.kind === "add_item") {
+        const inv = [...prev.inventory];
+        const idx = inv.findIndex(
+          (i) => i.item.toLowerCase() === evt.item.toLowerCase(),
+        );
+        if (idx >= 0) inv[idx] = { ...inv[idx], quantity: inv[idx].quantity + evt.quantity };
+        else inv.push({ item: evt.item, quantity: evt.quantity });
+        return { ...prev, inventory: inv };
+      }
+      if (evt.kind === "remove_item") {
+        const inv = prev.inventory
+          .map((i) =>
+            i.item.toLowerCase() === evt.item.toLowerCase()
+              ? { ...i, quantity: i.quantity - evt.quantity }
+              : i,
+          )
+          .filter((i) => i.quantity > 0);
+        return { ...prev, inventory: inv };
+      }
+      return prev;
+    });
+  }
+
   const active = campaigns.find((c) => c.id === activeId) ?? null;
 
   return (
@@ -73,6 +120,7 @@ function PageInner() {
         loading={loading}
         creating={creating}
         open={sidebarOpen}
+        character={character}
         onSelect={(id) => {
           setActiveId(id);
           setSidebarOpen(false);
@@ -80,12 +128,15 @@ function PageInner() {
         onNew={newCampaign}
         onDelete={deleteCampaign}
         onClose={() => setSidebarOpen(false)}
+        onCharacterUpdate={(next) => setCharacter(next)}
       />
       <DmChat
         campaignId={activeId}
         campaignTitle={active?.title ?? "AI Dungeon Master"}
         onOpenSidebar={() => setSidebarOpen(true)}
         onCampaignChanged={refresh}
+        onToolEvent={onToolEvent}
+        onStreamEnd={() => activeId && fetchCharacter(activeId)}
       />
     </div>
   );

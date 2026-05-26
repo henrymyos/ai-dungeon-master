@@ -32,13 +32,15 @@ export async function POST() {
     );
   }
 
-  // Seed the opening narration so reload-from-cold shows the same prompt
-  // every visitor saw on day one.
-  await admin.from("dm_messages").insert({
-    campaign_id: campaign.id,
-    role: "assistant",
-    content: OPENING_NARRATION,
-  });
+  // Seed the opening narration and the default character sheet in parallel.
+  await Promise.all([
+    admin.from("dm_messages").insert({
+      campaign_id: campaign.id,
+      role: "assistant",
+      content: OPENING_NARRATION,
+    }),
+    admin.from("dm_characters").insert({ campaign_id: campaign.id }),
+  ]);
 
   return NextResponse.json({ campaign });
 }

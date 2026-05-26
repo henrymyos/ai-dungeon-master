@@ -5,21 +5,28 @@ import { MarkdownAnswer } from "@/components/markdown-answer";
 import { MenuIcon, SendIcon } from "@/components/icons";
 import { useToast } from "@/components/toast";
 import type { DmMessageRow } from "@/lib/db";
+import type { ToolEvent } from "@/lib/tools";
 
 type Props = {
   campaignId: string | null;
   campaignTitle: string;
   onOpenSidebar: () => void;
   onCampaignChanged?: () => void;
+  onToolEvent?: (evt: ToolEvent) => void;
+  onStreamEnd?: () => void;
 };
 
-type Message = { id: string; role: "user" | "assistant"; content: string };
+type Message =
+  | { id: string; kind: "msg"; role: "user" | "assistant"; content: string }
+  | { id: string; kind: "tool"; event: ToolEvent };
 
 export function DmChat({
   campaignId,
   campaignTitle,
   onOpenSidebar,
   onCampaignChanged,
+  onToolEvent,
+  onStreamEnd,
 }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,6 +56,7 @@ export function DmChat({
         setMessages(
           rows.map((r) => ({
             id: String(r.id),
+            kind: "msg" as const,
             role: r.role,
             content: r.content,
           })),
@@ -80,8 +88,8 @@ export function DmChat({
     const dmId = `a-${Date.now()}`;
     setMessages((m) => [
       ...m,
-      { id: userId, role: "user", content: action },
-      { id: dmId, role: "assistant", content: "" },
+      { id: userId, kind: "msg", role: "user", content: action },
+      { id: dmId, kind: "msg", role: "assistant", content: "" },
     ]);
     setInput("");
     setBusy(true);
@@ -105,6 +113,10 @@ export function DmChat({
 
       let pending = "";
       let scheduled = false;
+      // Track which assistant message we're appending to. When a tool fires,
+      // we close the current assistant card and start a new one for the
+      // text that follows.
+      let currentDmId = dmId;
       const flush = () => {
         if (!pending) {
           scheduled = false;
@@ -113,9 +125,12 @@ export function DmChat({
         const t = pending;
         pending = "";
         scheduled = false;
+        const targetId = currentDmId;
         setMessages((m) =>
           m.map((msg) =>
-            msg.id === dmId ? { ...msg, content: msg.content + t } : msg,
+            msg.id === targetId && msg.kind === "msg"
+              ? { ...msg, content: msg.content + t }
+              : msg,
           ),
         );
       };
@@ -134,7 +149,12 @@ export function DmChat({
         for (const evt of events) {
           const line = evt.split("\n").find((l) => l.startsWith("data: "));
           if (!line) continue;
-          let parsed: { type: string; text?: string; message?: string };
+          let parsed: {
+            type: string;
+            text?: string;
+            message?: string;
+            event?: ToolEvent;
+          };
           try {
             parsed = JSON.parse(line.slice(6));
           } catch {
@@ -143,6 +163,38 @@ export function DmChat({
           if (parsed.type === "token" && parsed.text) {
             pending += parsed.text;
             schedule();
+          } else if (parsed.type === "tool" && parsed.event) {
+            // Drain any in-flight tokens to the current card before
+            // appending the tool effect so order is preserved visually.
+            flush();
+            const toolEvt = parsed.event;
+            const nextDmId = `a-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+            setMessages((m) => {
+              const out = [...m];
+              // Drop the current assistant card if it never received any text.
+              const lastIdx = out.findIndex((x) => x.id === currentDmId);
+              if (
+                lastIdx >= 0 &&
+                out[lastIdx].kind === "msg" &&
+                out[lastIdx].content.length === 0
+              ) {
+                out.splice(lastIdx, 1);
+              }
+              out.push({
+                id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                kind: "tool",
+                event: toolEvt,
+              });
+              out.push({
+                id: nextDmId,
+                kind: "msg",
+                role: "assistant",
+                content: "",
+              });
+              return out;
+            });
+            currentDmId = nextDmId;
+            onToolEvent?.(toolEvt);
           } else if (parsed.type === "title") {
             titleChanged = true;
           } else if (parsed.type === "error") {
@@ -151,13 +203,29 @@ export function DmChat({
         }
       }
       if (pending) flush();
+
+      // Clean up any trailing empty assistant card.
+      setMessages((m) =>
+        m.filter(
+          (x) => !(x.kind === "msg" && x.role === "assistant" && x.content.length === 0),
+        ),
+      );
+
       if (streamErr) throw new Error(streamErr);
 
-      // Title or updated_at likely changed; let the sidebar refresh.
-      if (titleChanged) onCampaignChanged?.();
-      else onCampaignChanged?.();
+      onCampaignChanged?.();
+      onStreamEnd?.();
     } catch (e) {
-      setMessages((m) => m.filter((msg) => msg.id !== dmId));
+      setMessages((m) =>
+        m.filter(
+          (msg) =>
+            !(
+              msg.kind === "msg" &&
+              msg.role === "assistant" &&
+              msg.content.length === 0
+            ),
+        ),
+      );
       toast.error(e instanceof Error ? e.message : "DM call failed.");
     } finally {
       setBusy(false);
@@ -192,9 +260,15 @@ export function DmChat({
         ) : loading ? (
           <SkeletonChat />
         ) : (
-          <ul className="max-w-3xl mx-auto space-y-6">
-            {messages.map((m) =>
-              m.role === "user" ? (
+          <ul className="max-w-3xl mx-auto space-y-4">
+            {messages.map((m) => {
+              if (m.kind === "tool")
+                return (
+                  <li key={m.id}>
+                    <ToolEffectCard event={m.event} />
+                  </li>
+                );
+              return m.role === "user" ? (
                 <li key={m.id} className="flex justify-end">
                   <div
                     className="max-w-[80%] rounded-2xl rounded-br-md
@@ -209,8 +283,8 @@ export function DmChat({
                 <li key={m.id}>
                   <NarrationCard content={m.content} />
                 </li>
-              ),
-            )}
+              );
+            })}
           </ul>
         )}
       </div>
@@ -291,6 +365,59 @@ function SkeletonChat() {
         <div className="h-3 bg-[#2a1f15] rounded w-4/6 mb-2" />
         <div className="h-3 bg-[#2a1f15] rounded w-3/6" />
       </div>
+    </div>
+  );
+}
+
+function ToolEffectCard({ event }: { event: ToolEvent }) {
+  let glyph = "•";
+  let title = "";
+  let detail = "";
+  let tone = "default";
+
+  if (event.kind === "roll_dice") {
+    glyph = "🎲";
+    const rollText =
+      event.rolls.length > 1
+        ? `${event.rolls.join(" + ")} = ${event.total}`
+        : `${event.total}`;
+    title = `${event.count}d${event.sides} — ${event.reason}`;
+    detail = rollText;
+  } else if (event.kind === "update_hp") {
+    const dmg = event.delta < 0;
+    glyph = dmg ? "💢" : "✚";
+    tone = dmg ? "bad" : "good";
+    title = `${dmg ? "" : "+"}${event.delta} HP · ${event.reason}`;
+    detail = `${event.hp} / ${event.max_hp}`;
+  } else if (event.kind === "add_item") {
+    glyph = "🎒";
+    tone = "good";
+    title = `Picked up ${event.item}${event.quantity > 1 ? ` ×${event.quantity}` : ""}`;
+  } else if (event.kind === "remove_item") {
+    glyph = "🪤";
+    title = `Lost ${event.item}${event.quantity > 1 ? ` ×${event.quantity}` : ""}`;
+  }
+
+  const ring =
+    tone === "bad"
+      ? "border-red-500/40 bg-red-500/[0.06]"
+      : tone === "good"
+        ? "border-emerald-500/40 bg-emerald-500/[0.06]"
+        : "border-[var(--accent)]/40 bg-[var(--accent)]/[0.06]";
+
+  return (
+    <div
+      className={`inline-flex items-center gap-2.5 rounded-lg border ${ring} px-3 py-1.5 text-xs`}
+    >
+      <span aria-hidden className="text-base leading-none">
+        {glyph}
+      </span>
+      <span className="text-zinc-200">{title}</span>
+      {detail && (
+        <span className="font-mono text-[11px] text-[var(--accent)]">
+          {detail}
+        </span>
+      )}
     </div>
   );
 }

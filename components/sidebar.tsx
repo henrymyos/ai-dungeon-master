@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import type { DmCampaign } from "@/lib/db";
+import type { DmCampaign, DmCharacter } from "@/lib/db";
 import { CloseIcon, TrashIcon } from "@/components/icons";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { CharacterSheet } from "@/components/character-sheet";
 
 type Props = {
   campaigns: DmCampaign[];
@@ -11,10 +12,12 @@ type Props = {
   loading: boolean;
   creating: boolean;
   open: boolean;
+  character: DmCharacter | null;
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => Promise<void>;
   onClose: () => void;
+  onCharacterUpdate: (next: DmCharacter) => void;
 };
 
 export function Sidebar({
@@ -23,10 +26,12 @@ export function Sidebar({
   loading,
   creating,
   open,
+  character,
   onSelect,
   onNew,
   onDelete,
   onClose,
+  onCharacterUpdate,
 }: Props) {
   const [pendingDelete, setPendingDelete] = useState<DmCampaign | null>(null);
 
@@ -114,9 +119,13 @@ export function Sidebar({
           )}
         </div>
 
-        <div className="px-5 py-3 text-[11px] text-[var(--muted)] border-t border-[var(--border)]">
-          Phase 2 · persistent campaigns
-        </div>
+        {activeId && character && (
+          <CharacterSheet
+            character={character}
+            campaignId={activeId}
+            onUpdate={onCharacterUpdate}
+          />
+        )}
 
         <ConfirmDialog
           open={pendingDelete !== null}
