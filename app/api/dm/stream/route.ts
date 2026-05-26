@@ -8,6 +8,7 @@ import {
 } from "@/lib/dm";
 import { executeTool, type ToolEvent } from "@/lib/tools";
 import { db, type DmCharacter, type DmMessageRow } from "@/lib/db";
+import { loadDmContext, summarizeCampaignIfNeeded } from "@/lib/summarize";
 import { getUserId } from "@/lib/user";
 
 export const runtime = "nodejs";
@@ -45,33 +46,31 @@ export async function POST(req: Request) {
     });
   }
 
-  // Pull character + history.
-  const [{ data: charRow }, { data: priorRows }] = await Promise.all([
-    admin
-      .from("dm_characters")
-      .select(
-        "id, campaign_id, name, class, hp, max_hp, attributes, inventory, created_at, updated_at",
-      )
-      .eq("campaign_id", campaignId)
-      .single(),
-    admin
-      .from("dm_messages")
-      .select("role, content")
-      .eq("campaign_id", campaignId)
-      .order("created_at", { ascending: true }),
-  ]);
+  // Character sheet for system context.
+  const { data: charRow } = await admin
+    .from("dm_characters")
+    .select(
+      "id, campaign_id, name, class, hp, max_hp, attributes, inventory, created_at, updated_at",
+    )
+    .eq("campaign_id", campaignId)
+    .single();
   const character = (charRow ?? null) as DmCharacter | null;
-  const prior = (priorRows ?? []) as Pick<DmMessageRow, "role" | "content">[];
+
+  // Count prior user turns for the title heuristic.
+  const { count: priorUserCount } = await admin
+    .from("dm_messages")
+    .select("id", { count: "exact", head: true })
+    .eq("campaign_id", campaignId)
+    .eq("role", "user");
 
   // Persist the player turn immediately.
   await admin
     .from("dm_messages")
     .insert({ campaign_id: campaignId, role: "user", content: action });
 
-  // Auto-title campaign on first action.
-  const userTurnCount = prior.filter((p) => p.role === "user").length;
+  // Auto-title on first action.
   let nextTitle: string | null = null;
-  if (userTurnCount === 0) {
+  if ((priorUserCount ?? 0) === 0) {
     const titled = action.trim().replace(/\s+/g, " ").slice(0, 60);
     if (titled.length > 0) nextTitle = titled;
   }
@@ -83,6 +82,18 @@ export async function POST(req: Request) {
     })
     .eq("id", campaignId);
 
+  // Compress old turns into a recap if the campaign has gotten long. This
+  // runs before generation, so the DM uses the compacted context.
+  let summarizedCount: number | undefined;
+  try {
+    const r = await summarizeCampaignIfNeeded(campaignId);
+    if (r?.summarized) summarizedCount = r.messagesCollapsed;
+  } catch {
+    // Non-fatal — just send the full history.
+  }
+
+  const { recap, recent } = await loadDmContext(campaignId);
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
@@ -92,15 +103,31 @@ export async function POST(req: Request) {
         );
       };
 
+      const totals = {
+        input_tokens: 0,
+        output_tokens: 0,
+        cache_read_tokens: 0,
+        cache_creation_tokens: 0,
+      };
+
       try {
         if (nextTitle) send({ type: "title", title: nextTitle });
+        if (summarizedCount)
+          send({ type: "summarized", messagesCollapsed: summarizedCount });
 
-        // Build the working message list. Claude gets text turns from prior
-        // chat plus the new user action.
-        const messages: Anthropic.MessageParam[] = [
-          ...prior.map((p) => ({ role: p.role, content: p.content })),
-          { role: "user", content: action },
-        ];
+        // Build messages. The recap, if present, becomes a fake assistant
+        // turn at the very start ("Previously…") so Claude treats it as
+        // canon without thinking it's a player utterance.
+        const messages: Anthropic.MessageParam[] = [];
+        if (recap) {
+          messages.push({
+            role: "assistant",
+            content: `[Previously…]\n${recap}`,
+          });
+        }
+        for (const m of recent) {
+          messages.push({ role: m.role, content: m.content });
+        }
 
         const system = [
           {
@@ -112,9 +139,6 @@ export async function POST(req: Request) {
 
         const client = anthropic();
 
-        // Tool-use loop. Keep calling Claude until stop_reason !== 'tool_use'.
-        // We accumulate the text the DM emits along the way so we can persist
-        // the final assistant turn and emit it to the client.
         let accumulatedText = "";
         const maxIterations = 6;
         for (let i = 0; i < maxIterations; i++) {
@@ -126,7 +150,13 @@ export async function POST(req: Request) {
             messages,
           });
 
-          // Drain text blocks straight to the client.
+          totals.input_tokens += resp.usage.input_tokens ?? 0;
+          totals.output_tokens += resp.usage.output_tokens ?? 0;
+          totals.cache_read_tokens +=
+            resp.usage.cache_read_input_tokens ?? 0;
+          totals.cache_creation_tokens +=
+            resp.usage.cache_creation_input_tokens ?? 0;
+
           for (const block of resp.content) {
             if (block.type === "text" && block.text) {
               send({ type: "token", text: block.text });
@@ -136,7 +166,6 @@ export async function POST(req: Request) {
 
           if (resp.stop_reason !== "tool_use") break;
 
-          // Execute each tool_use block, build tool_result messages.
           const toolUseBlocks = resp.content.filter(
             (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
           );
@@ -144,7 +173,11 @@ export async function POST(req: Request) {
           for (const block of toolUseBlocks) {
             let event: ToolEvent;
             try {
-              event = await executeTool(block.name, block.input, campaignId);
+              event = await executeTool(
+                block.name,
+                block.input,
+                campaignId,
+              );
               send({ type: "tool", event });
               toolResultContent.push({
                 type: "tool_result",
@@ -152,18 +185,16 @@ export async function POST(req: Request) {
                 content: JSON.stringify(event),
               });
             } catch (e) {
-              const message = e instanceof Error ? e.message : "tool error";
               toolResultContent.push({
                 type: "tool_result",
                 tool_use_id: block.id,
                 is_error: true,
-                content: message,
+                content:
+                  e instanceof Error ? e.message : "tool error",
               });
             }
           }
 
-          // Append the assistant's tool_use turn + the tool_result turn so
-          // Claude can keep going.
           messages.push({ role: "assistant", content: resp.content });
           messages.push({ role: "user", content: toolResultContent });
         }
@@ -173,9 +204,14 @@ export async function POST(req: Request) {
             campaign_id: campaignId,
             role: "assistant",
             content: accumulatedText,
+            input_tokens: totals.input_tokens,
+            output_tokens: totals.output_tokens,
+            cache_read_tokens: totals.cache_read_tokens,
+            cache_creation_tokens: totals.cache_creation_tokens,
           });
         }
 
+        send({ type: "usage", usage: totals });
         send({ type: "done" });
       } catch (err) {
         send({

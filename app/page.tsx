@@ -7,6 +7,17 @@ import { ToastProvider, useToast } from "@/components/toast";
 import type { DmCampaign, DmCharacter } from "@/lib/db";
 import type { ToolEvent } from "@/lib/tools";
 
+type UsageSummary = {
+  turns: number;
+  tokens: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_tokens: number;
+    cache_creation_tokens: number;
+  };
+  estimatedCostUsd: number;
+};
+
 function PageInner() {
   const [campaigns, setCampaigns] = useState<DmCampaign[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -14,6 +25,7 @@ function PageInner() {
   const [creating, setCreating] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [character, setCharacter] = useState<DmCharacter | null>(null);
+  const [usage, setUsage] = useState<UsageSummary | null>(null);
   const toast = useToast();
 
   const refresh = useCallback(async () => {
@@ -36,13 +48,20 @@ function PageInner() {
     setCharacter(character);
   }, []);
 
+  const refreshUsage = useCallback(async () => {
+    const res = await fetch("/api/usage", { cache: "no-store" });
+    if (!res.ok) return;
+    setUsage((await res.json()) as UsageSummary);
+  }, []);
+
   useEffect(() => {
     (async () => {
       const list = await refresh();
       if (list && list.length > 0) setActiveId(list[0].id);
+      await refreshUsage();
       setLoading(false);
     })();
-  }, [refresh]);
+  }, [refresh, refreshUsage]);
 
   useEffect(() => {
     if (activeId) fetchCharacter(activeId);
@@ -81,8 +100,6 @@ function PageInner() {
   }
 
   function onToolEvent(evt: ToolEvent) {
-    // Apply mutations to local character state so the sidebar feels live
-    // instead of waiting on the post-stream refetch.
     setCharacter((prev) => {
       if (!prev) return prev;
       if (evt.kind === "update_hp")
@@ -92,7 +109,8 @@ function PageInner() {
         const idx = inv.findIndex(
           (i) => i.item.toLowerCase() === evt.item.toLowerCase(),
         );
-        if (idx >= 0) inv[idx] = { ...inv[idx], quantity: inv[idx].quantity + evt.quantity };
+        if (idx >= 0)
+          inv[idx] = { ...inv[idx], quantity: inv[idx].quantity + evt.quantity };
         else inv.push({ item: evt.item, quantity: evt.quantity });
         return { ...prev, inventory: inv };
       }
@@ -121,6 +139,7 @@ function PageInner() {
         creating={creating}
         open={sidebarOpen}
         character={character}
+        usage={usage}
         onSelect={(id) => {
           setActiveId(id);
           setSidebarOpen(false);
@@ -133,10 +152,15 @@ function PageInner() {
       <DmChat
         campaignId={activeId}
         campaignTitle={active?.title ?? "AI Dungeon Master"}
+        shareToken={active?.share_token ?? null}
         onOpenSidebar={() => setSidebarOpen(true)}
         onCampaignChanged={refresh}
         onToolEvent={onToolEvent}
-        onStreamEnd={() => activeId && fetchCharacter(activeId)}
+        onStreamEnd={async () => {
+          if (activeId) await fetchCharacter(activeId);
+          await refreshUsage();
+        }}
+        onShareTokenChanged={refresh}
       />
     </div>
   );

@@ -5,6 +5,18 @@ import type { DmCampaign, DmCharacter } from "@/lib/db";
 import { CloseIcon, TrashIcon } from "@/components/icons";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CharacterSheet } from "@/components/character-sheet";
+import { formatCost } from "@/lib/pricing";
+
+type UsageSummary = {
+  turns: number;
+  tokens: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_tokens: number;
+    cache_creation_tokens: number;
+  };
+  estimatedCostUsd: number;
+};
 
 type Props = {
   campaigns: DmCampaign[];
@@ -13,6 +25,7 @@ type Props = {
   creating: boolean;
   open: boolean;
   character: DmCharacter | null;
+  usage: UsageSummary | null;
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => Promise<void>;
@@ -27,6 +40,7 @@ export function Sidebar({
   creating,
   open,
   character,
+  usage,
   onSelect,
   onNew,
   onDelete,
@@ -126,6 +140,7 @@ export function Sidebar({
             onUpdate={onCharacterUpdate}
           />
         )}
+        <UsageFooter usage={usage} />
 
         <ConfirmDialog
           open={pendingDelete !== null}
@@ -204,6 +219,82 @@ function SkeletonRows() {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function UsageFooter({ usage }: { usage: UsageSummary | null }) {
+  const [open, setOpen] = useState(false);
+  if (!usage || usage.turns === 0) {
+    return (
+      <div className="px-5 py-3 text-[11px] text-[var(--muted)] border-t border-[var(--border)]">
+        Phase 5 · summarization + tool use
+      </div>
+    );
+  }
+  const t = usage.tokens;
+  const cacheRate =
+    t.input_tokens + t.cache_read_tokens === 0
+      ? 0
+      : t.cache_read_tokens / (t.input_tokens + t.cache_read_tokens);
+  return (
+    <div className="border-t border-[var(--border)]">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full px-5 py-3 flex items-center justify-between text-[11px] text-[var(--muted)] hover:bg-[#1a1410]/60 transition-colors"
+      >
+        <span>
+          {usage.turns} {usage.turns === 1 ? "turn" : "turns"}
+        </span>
+        <span className="font-mono text-[var(--accent)]">
+          {formatCost(usage.estimatedCostUsd)}
+        </span>
+      </button>
+      {open && (
+        <div className="px-5 pb-3 text-[10px] text-[var(--muted)] space-y-1">
+          <Row label="input tokens" value={t.input_tokens.toLocaleString()} />
+          <Row
+            label="output tokens"
+            value={t.output_tokens.toLocaleString()}
+          />
+          <Row
+            label="cache reads"
+            value={t.cache_read_tokens.toLocaleString()}
+          />
+          {t.cache_creation_tokens > 0 && (
+            <Row
+              label="cache writes"
+              value={t.cache_creation_tokens.toLocaleString()}
+            />
+          )}
+          {cacheRate > 0 && (
+            <Row
+              label="cache hit rate"
+              value={`${(cacheRate * 100).toFixed(0)}%`}
+              accent
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Row({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <span>{label}</span>
+      <span className={`font-mono ${accent ? "text-[var(--accent)]" : ""}`}>
+        {value}
+      </span>
     </div>
   );
 }

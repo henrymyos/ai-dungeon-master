@@ -8,7 +8,9 @@ export async function GET() {
   const userId = await getUserId();
   const { data, error } = await db()
     .from("dm_campaigns")
-    .select("id, user_id, title, created_at, updated_at")
+    .select(
+      "id, user_id, title, summary, summary_through_message_id, share_token, created_at, updated_at",
+    )
     .eq("user_id", userId)
     .order("updated_at", { ascending: false });
 

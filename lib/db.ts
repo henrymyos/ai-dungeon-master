@@ -4,6 +4,9 @@ export type DmCampaign = {
   id: string;
   user_id: string;
   title: string;
+  summary: string | null;
+  summary_through_message_id: number | null;
+  share_token: string | null;
   created_at: string;
   updated_at: string;
 };

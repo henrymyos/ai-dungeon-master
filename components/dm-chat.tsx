@@ -10,10 +10,12 @@ import type { ToolEvent } from "@/lib/tools";
 type Props = {
   campaignId: string | null;
   campaignTitle: string;
+  shareToken: string | null;
   onOpenSidebar: () => void;
   onCampaignChanged?: () => void;
   onToolEvent?: (evt: ToolEvent) => void;
   onStreamEnd?: () => void;
+  onShareTokenChanged?: () => void;
 };
 
 type Message =
@@ -23,16 +25,20 @@ type Message =
 export function DmChat({
   campaignId,
   campaignTitle,
+  shareToken,
   onOpenSidebar,
   onCampaignChanged,
   onToolEvent,
   onStreamEnd,
+  onShareTokenChanged,
 }: Props) {
+  const [shareOpen, setShareOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const toast = useToast();
 
   // Load this campaign's history whenever the active id changes.
@@ -95,10 +101,13 @@ export function DmChat({
     setBusy(true);
 
     try {
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
       const res = await fetch("/api/dm/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ campaignId, action }),
+        signal: ctrl.signal,
       });
       if (!res.ok || !res.body) {
         const body = await res.json().catch(() => ({}));
@@ -226,10 +235,17 @@ export function DmChat({
             ),
         ),
       );
-      toast.error(e instanceof Error ? e.message : "DM call failed.");
+      if (e instanceof Error && e.name !== "AbortError") {
+        toast.error(e.message);
+      }
     } finally {
+      abortRef.current = null;
       setBusy(false);
     }
+  }
+
+  function stop() {
+    abortRef.current?.abort();
   }
 
   return (
@@ -248,11 +264,28 @@ export function DmChat({
           </h2>
           <p className="text-[11px] text-[var(--muted)]">
             {campaignId
-              ? "A foggy forest at dusk · Phase 2"
+              ? "A foggy forest at dusk"
               : "Pick an adventure on the left, or start a new one"}
           </p>
         </div>
+        {campaignId && (
+          <button
+            onClick={() => setShareOpen(true)}
+            className="text-xs text-[var(--muted)] hover:text-[var(--accent)] border border-[var(--border)] hover:border-[var(--accent)]/40 px-2.5 py-1.5 rounded-md transition-colors"
+          >
+            Share
+          </button>
+        )}
       </header>
+      {campaignId && (
+        <ShareModal
+          open={shareOpen}
+          campaignId={campaignId}
+          shareToken={shareToken}
+          onClose={() => setShareOpen(false)}
+          onChange={onShareTokenChanged ?? (() => {})}
+        />
+      )}
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-6 py-6">
         {!campaignId ? (
@@ -315,17 +348,31 @@ export function DmChat({
               className="flex-1 resize-none bg-transparent outline-none text-sm py-1.5
                          placeholder:text-zinc-500 disabled:opacity-50"
             />
-            <button
-              type="submit"
-              disabled={!input.trim() || busy}
-              className="shrink-0 flex items-center justify-center w-9 h-9 rounded-xl
-                         bg-[var(--accent)] text-zinc-950
-                         disabled:bg-[#2a1f15] disabled:text-zinc-600
-                         hover:brightness-110 transition-all"
-              aria-label="Send"
-            >
-              <SendIcon className="w-4 h-4" />
-            </button>
+            {busy ? (
+              <button
+                type="button"
+                onClick={stop}
+                className="shrink-0 flex items-center justify-center w-9 h-9 rounded-xl
+                           bg-zinc-800 text-zinc-100 border border-zinc-700
+                           hover:bg-zinc-700 transition-all"
+                aria-label="Stop"
+                title="Stop generating"
+              >
+                <span className="w-2.5 h-2.5 bg-zinc-100 rounded-sm" />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!input.trim()}
+                className="shrink-0 flex items-center justify-center w-9 h-9 rounded-xl
+                           bg-[var(--accent)] text-zinc-950
+                           disabled:bg-[#2a1f15] disabled:text-zinc-600
+                           hover:brightness-110 transition-all"
+                aria-label="Send"
+              >
+                <SendIcon className="w-4 h-4" />
+              </button>
+            )}
           </form>
           <p className="max-w-3xl mx-auto mt-2 text-[11px] text-[var(--muted)] text-center">
             Type any action — &ldquo;I open the lantern&rdquo;, &ldquo;I creep
@@ -364,6 +411,147 @@ function SkeletonChat() {
         <div className="h-3 bg-[#2a1f15] rounded w-5/6 mb-2" />
         <div className="h-3 bg-[#2a1f15] rounded w-4/6 mb-2" />
         <div className="h-3 bg-[#2a1f15] rounded w-3/6" />
+      </div>
+    </div>
+  );
+}
+
+function ShareModal({
+  open,
+  campaignId,
+  shareToken,
+  onClose,
+  onChange,
+}: {
+  open: boolean;
+  campaignId: string;
+  shareToken: string | null;
+  onClose: () => void;
+  onChange: () => void;
+}) {
+  const [token, setToken] = useState<string | null>(shareToken);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const toast = useToast();
+
+  useEffect(() => setToken(shareToken), [shareToken]);
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const url = token
+    ? `${typeof window !== "undefined" ? window.location.origin : ""}/share/${token}`
+    : null;
+
+  async function generate() {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/share`, {
+        method: "POST",
+      });
+      const body = (await res.json()) as { token?: string; error?: string };
+      if (!res.ok || !body.token) throw new Error(body.error ?? "failed");
+      setToken(body.token);
+      onChange();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't create link.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revoke() {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/share`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("revoke failed");
+      setToken(null);
+      onChange();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't revoke link.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copy() {
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Couldn't copy.");
+    }
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center"
+    >
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div
+        className="relative w-[min(440px,calc(100vw-2rem))] rounded-2xl border border-[var(--border)]
+                   bg-[#100c08]/95 shadow-[0_20px_60px_-10px_rgba(0,0,0,0.7)] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)]/60 to-transparent" />
+        <div className="px-5 py-4 border-b border-[var(--border)]">
+          <h2 className="text-sm font-semibold">Share this adventure</h2>
+          <p className="mt-1 text-xs text-[var(--muted)] leading-relaxed">
+            Anyone with the link can read the transcript and character sheet.
+            They can&apos;t add to your story or see your other campaigns.
+          </p>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          {url ? (
+            <>
+              <div className="flex items-stretch gap-2">
+                <input
+                  readOnly
+                  value={url}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="flex-1 bg-zinc-900/60 border border-[var(--border)] rounded-md px-3 py-2 text-xs font-mono text-zinc-100 outline-none"
+                />
+                <button
+                  onClick={copy}
+                  className="px-3 py-2 text-xs rounded-md font-medium bg-[var(--accent)] text-zinc-950 hover:brightness-110 transition-all"
+                >
+                  {copied ? "Copied" : "Copy"}
+                </button>
+              </div>
+              <button
+                disabled={busy}
+                onClick={revoke}
+                className="text-[11px] text-red-400/80 hover:text-red-300 transition-colors"
+              >
+                Revoke link
+              </button>
+            </>
+          ) : (
+            <button
+              disabled={busy}
+              onClick={generate}
+              className="w-full px-3 py-2 text-sm rounded-md font-medium bg-[var(--accent)] text-zinc-950 hover:brightness-110 disabled:opacity-50 transition-all"
+            >
+              {busy ? "Creating…" : "Create share link"}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
