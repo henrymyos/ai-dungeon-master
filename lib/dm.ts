@@ -15,6 +15,7 @@ const TOOL_INSTRUCTIONS = `You have access to tools that mutate the player's sta
 - roll_dice — for skill checks, attacks, saves, or any moment where chance matters. Narrate what's being rolled BEFORE calling, then describe the outcome AFTER.
 - update_hp — when the player takes damage or recovers. Use negative deltas for damage, positive for healing. Reference the new HP in your narration.
 - add_item / remove_item — when the player picks something up, loses something, uses a consumable, gives a gift, etc.
+- set_scene — when the scene meaningfully changes: a new location, a dramatic reveal, the arrival of a notable figure, a shift from peace to combat. Call this AT THE START of the turn (before any narration of the change) with a vivid 1–2 sentence image_prompt that captures the visual. Don't call it every turn — only when the change is large enough that a fresh picture and soundscape would help the player.
 
 Do NOT call tools for fluff. A whispering wind doesn't need a die roll. Only call tools for moments where the result of the tool will change what you say next. Always describe a beat of narration around each tool call so the world feels alive, not transactional.`;
 
@@ -113,6 +114,31 @@ export const DM_TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ["item"],
+    },
+  },
+  {
+    name: "set_scene",
+    description:
+      "Call when the scene meaningfully changes — a new location, dramatic reveal, or shift from peace to combat. Generates a fresh illustration and ambient soundscape for the player.",
+    input_schema: {
+      type: "object",
+      properties: {
+        location: {
+          type: "string",
+          description: "Short label, e.g. 'Foggy forest clearing' or 'The Wayfarer's Rest tavern'.",
+        },
+        mood: {
+          type: "string",
+          enum: ["calm", "tense", "combat", "mysterious", "festive"],
+          description: "Which ambient soundscape to play.",
+        },
+        image_prompt: {
+          type: "string",
+          description:
+            "Vivid 1–2 sentence visual description for an image generator. Be concrete: lighting, key objects, atmosphere. No characters' names; describe figures by appearance.",
+        },
+      },
+      required: ["location", "mood", "image_prompt"],
     },
   },
 ];

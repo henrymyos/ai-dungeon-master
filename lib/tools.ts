@@ -4,6 +4,8 @@ import { db, type DmCharacter, type InventoryItem } from "@/lib/db";
 /** Result of a single tool invocation. The shape is what we send back to
  *  Claude as the tool_result content AND what we emit to the client as a
  *  UI event. */
+export type SceneMood = "calm" | "tense" | "combat" | "mysterious" | "festive";
+
 export type ToolEvent =
   | {
       kind: "roll_dice";
@@ -21,7 +23,14 @@ export type ToolEvent =
       max_hp: number;
     }
   | { kind: "add_item"; item: string; quantity: number }
-  | { kind: "remove_item"; item: string; quantity: number; remaining: number };
+  | { kind: "remove_item"; item: string; quantity: number; remaining: number }
+  | {
+      kind: "set_scene";
+      location: string;
+      mood: SceneMood;
+      image_prompt: string;
+      image_url: string;
+    };
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n));
@@ -89,6 +98,37 @@ export async function executeTool(
         .update({ inventory: inv, updated_at: new Date().toISOString() })
         .eq("campaign_id", campaignId);
       return { kind: "add_item", item, quantity };
+    }
+    case "set_scene": {
+      const location = String(args.location ?? "").trim();
+      const mood = String(args.mood ?? "calm").trim() as SceneMood;
+      const validMoods: SceneMood[] = [
+        "calm",
+        "tense",
+        "combat",
+        "mysterious",
+        "festive",
+      ];
+      const safeMood: SceneMood = validMoods.includes(mood) ? mood : "calm";
+      const prompt = String(args.image_prompt ?? "").trim();
+      // Pollinations.ai — free, no auth, supports flux. We add stylistic
+      // suffixes for a consistent dark-fantasy painterly look and a fixed
+      // seed seeded by the prompt so reload renders the same image.
+      const styled = `${prompt}, dark fantasy concept art, painterly, atmospheric, cinematic lighting, no text, no watermark`;
+      const seed = Array.from(prompt).reduce(
+        (a, c) => (a * 31 + c.charCodeAt(0)) >>> 0,
+        7,
+      );
+      const image_url = `https://image.pollinations.ai/prompt/${encodeURIComponent(
+        styled,
+      )}?width=768&height=432&model=flux&nologo=true&private=true&seed=${seed}`;
+      return {
+        kind: "set_scene",
+        location,
+        mood: safeMood,
+        image_prompt: prompt,
+        image_url,
+      };
     }
     case "remove_item": {
       const item = String(args.item ?? "").trim();

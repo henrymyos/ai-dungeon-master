@@ -26,7 +26,7 @@ export async function GET(
 
   const { data, error } = await admin
     .from("dm_messages")
-    .select("id, campaign_id, role, content, created_at")
+    .select("id, campaign_id, role, content, scene, created_at")
     .eq("campaign_id", id)
     .order("created_at", { ascending: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

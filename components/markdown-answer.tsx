@@ -27,7 +27,7 @@ export function MarkdownAnswer({ text }: Props) {
   };
 
   return (
-    <div className="text-zinc-100">
+    <div className="text-zinc-100 narration">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {text}
       </ReactMarkdown>

@@ -66,3 +66,32 @@ body {
   from { opacity: 0; transform: translateY(6px) scale(0.98); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
+
+/* Each markdown block in a DM narration card eases up as it streams in. */
+@keyframes narration-line-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.narration p,
+.narration li,
+.narration h1,
+.narration h2,
+.narration h3,
+.narration blockquote {
+  animation: narration-line-in 320ms ease-out both;
+}
+
+/* Blinking caret tacked onto the end of the currently-streaming message. */
+@keyframes caret-blink {
+  0%, 49%   { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+.narration-streaming::after {
+  content: "▊";
+  display: inline-block;
+  margin-left: 2px;
+  color: var(--accent);
+  animation: caret-blink 0.9s steps(1) infinite;
+}

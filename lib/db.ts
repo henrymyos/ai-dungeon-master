@@ -11,11 +11,19 @@ export type DmCampaign = {
   updated_at: string;
 };
 
+export type DmScene = {
+  location: string;
+  mood: "calm" | "tense" | "combat" | "mysterious" | "festive";
+  image_prompt: string;
+  image_url: string;
+};
+
 export type DmMessageRow = {
   id: number;
   campaign_id: string;
   role: "user" | "assistant";
   content: string;
+  scene: DmScene | null;
   created_at: string;
 };
 

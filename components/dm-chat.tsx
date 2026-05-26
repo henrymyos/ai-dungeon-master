@@ -2,10 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MarkdownAnswer } from "@/components/markdown-answer";
-import { MenuIcon, SendIcon } from "@/components/icons";
+import { FlameIcon, MenuIcon, SendIcon, SpeakerIcon } from "@/components/icons";
 import { useToast } from "@/components/toast";
-import type { DmMessageRow } from "@/lib/db";
+import type { DmMessageRow, DmScene } from "@/lib/db";
 import type { ToolEvent } from "@/lib/tools";
+import {
+  cancelSpeech,
+  isTtsAvailable,
+  isTtsEnabled,
+  setTtsEnabled,
+  speak,
+} from "@/lib/speech";
+import { ambient } from "@/lib/ambient";
 
 type Props = {
   campaignId: string | null;
@@ -19,8 +27,15 @@ type Props = {
 };
 
 type Message =
-  | { id: string; kind: "msg"; role: "user" | "assistant"; content: string }
-  | { id: string; kind: "tool"; event: ToolEvent };
+  | {
+      id: string;
+      kind: "msg";
+      role: "user" | "assistant";
+      content: string;
+      scene?: DmScene | null;
+    }
+  | { id: string; kind: "tool"; event: ToolEvent }
+  | { id: string; kind: "scene"; scene: DmScene };
 
 export function DmChat({
   campaignId,
@@ -33,6 +48,37 @@ export function DmChat({
   onShareTokenChanged,
 }: Props) {
   const [shareOpen, setShareOpen] = useState(false);
+  const [ttsOn, setTtsOn] = useState(false);
+  const [ambientOn, setAmbientOn] = useState(false);
+  const ttsAvailable = isTtsAvailable();
+
+  useEffect(() => {
+    setTtsOn(isTtsEnabled());
+    setAmbientOn(ambient.isEnabled());
+  }, []);
+
+  function toggleTts() {
+    const next = !ttsOn;
+    setTtsOn(next);
+    setTtsEnabled(next);
+    if (!next) cancelSpeech();
+  }
+
+  function toggleAmbient() {
+    const next = !ambientOn;
+    setAmbientOn(next);
+    ambient.setEnabled(next);
+    if (next) {
+      // Pick the mood from the most recent scene if any, default calm.
+      const lastScene = [...messages]
+        .reverse()
+        .find((m) => m.kind === "scene");
+      const mood = lastScene && lastScene.kind === "scene" ? lastScene.scene.mood : "calm";
+      ambient.setMood(mood);
+    } else {
+      ambient.stop();
+    }
+  }
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [input, setInput] = useState("");
@@ -59,14 +105,32 @@ export function DmChat({
           messages: DmMessageRow[];
         };
         if (cancelled) return;
-        setMessages(
-          rows.map((r) => ({
+        // Hydrate messages, expanding any persisted scene into its own
+        // card directly before the assistant message that produced it.
+        const out: Message[] = [];
+        let lastScene: DmScene | null = null;
+        for (const r of rows) {
+          if (r.scene && r.role === "assistant") {
+            out.push({
+              id: `s-${r.id}`,
+              kind: "scene",
+              scene: r.scene,
+            });
+            lastScene = r.scene;
+          }
+          out.push({
             id: String(r.id),
-            kind: "msg" as const,
+            kind: "msg",
             role: r.role,
             content: r.content,
-          })),
-        );
+            scene: r.scene,
+          });
+        }
+        setMessages(out);
+        // Sync the ambient bed to whatever the last scene was.
+        if (lastScene && ambient.isEnabled()) {
+          ambient.setMood(lastScene.mood);
+        }
       } catch (e) {
         if (!cancelled)
           toast.error(e instanceof Error ? e.message : "Load failed.");
@@ -173,14 +237,12 @@ export function DmChat({
             pending += parsed.text;
             schedule();
           } else if (parsed.type === "tool" && parsed.event) {
-            // Drain any in-flight tokens to the current card before
-            // appending the tool effect so order is preserved visually.
             flush();
             const toolEvt = parsed.event;
+            const isScene = toolEvt.kind === "set_scene";
             const nextDmId = `a-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
             setMessages((m) => {
               const out = [...m];
-              // Drop the current assistant card if it never received any text.
               const lastIdx = out.findIndex((x) => x.id === currentDmId);
               if (
                 lastIdx >= 0 &&
@@ -189,11 +251,24 @@ export function DmChat({
               ) {
                 out.splice(lastIdx, 1);
               }
-              out.push({
-                id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-                kind: "tool",
-                event: toolEvt,
-              });
+              if (isScene) {
+                out.push({
+                  id: `sc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                  kind: "scene",
+                  scene: {
+                    location: toolEvt.location,
+                    mood: toolEvt.mood,
+                    image_prompt: toolEvt.image_prompt,
+                    image_url: toolEvt.image_url,
+                  },
+                });
+              } else {
+                out.push({
+                  id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                  kind: "tool",
+                  event: toolEvt,
+                });
+              }
               out.push({
                 id: nextDmId,
                 kind: "msg",
@@ -203,6 +278,9 @@ export function DmChat({
               return out;
             });
             currentDmId = nextDmId;
+            if (toolEvt.kind === "set_scene" && ambient.isEnabled()) {
+              ambient.setMood(toolEvt.mood);
+            }
             onToolEvent?.(toolEvt);
           } else if (parsed.type === "title") {
             titleChanged = true;
@@ -221,6 +299,20 @@ export function DmChat({
       );
 
       if (streamErr) throw new Error(streamErr);
+
+      // Speak the final accumulated text from this turn (the last assistant
+      // card by id ordering — we collected it implicitly via setMessages).
+      if (ttsOn) {
+        setMessages((m) => {
+          const lastAsst = [...m]
+            .reverse()
+            .find((x) => x.kind === "msg" && x.role === "assistant");
+          if (lastAsst && lastAsst.kind === "msg" && lastAsst.content) {
+            speak(lastAsst.content);
+          }
+          return m;
+        });
+      }
 
       onCampaignChanged?.();
       onStreamEnd?.();
@@ -246,6 +338,7 @@ export function DmChat({
 
   function stop() {
     abortRef.current?.abort();
+    cancelSpeech();
   }
 
   return (
@@ -269,12 +362,40 @@ export function DmChat({
           </p>
         </div>
         {campaignId && (
-          <button
-            onClick={() => setShareOpen(true)}
-            className="text-xs text-[var(--muted)] hover:text-[var(--accent)] border border-[var(--border)] hover:border-[var(--accent)]/40 px-2.5 py-1.5 rounded-md transition-colors"
-          >
-            Share
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={toggleAmbient}
+              title={ambientOn ? "Mute ambient" : "Play ambient soundscape"}
+              aria-label={ambientOn ? "Mute ambient" : "Unmute ambient"}
+              className={`flex items-center justify-center w-8 h-8 rounded-md border transition-colors ${
+                ambientOn
+                  ? "border-[var(--accent)]/40 text-[var(--accent)] bg-[var(--accent)]/[0.06]"
+                  : "border-[var(--border)] text-[var(--muted)] hover:text-zinc-100"
+              }`}
+            >
+              <FlameIcon className="w-4 h-4" muted={!ambientOn} />
+            </button>
+            {ttsAvailable && (
+              <button
+                onClick={toggleTts}
+                title={ttsOn ? "Mute narration" : "Read narration aloud"}
+                aria-label={ttsOn ? "Mute narration" : "Unmute narration"}
+                className={`flex items-center justify-center w-8 h-8 rounded-md border transition-colors ${
+                  ttsOn
+                    ? "border-[var(--accent)]/40 text-[var(--accent)] bg-[var(--accent)]/[0.06]"
+                    : "border-[var(--border)] text-[var(--muted)] hover:text-zinc-100"
+                }`}
+              >
+                <SpeakerIcon muted={!ttsOn} className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              onClick={() => setShareOpen(true)}
+              className="text-xs text-[var(--muted)] hover:text-[var(--accent)] border border-[var(--border)] hover:border-[var(--accent)]/40 px-2.5 py-1.5 rounded-md transition-colors"
+            >
+              Share
+            </button>
+          </div>
         )}
       </header>
       {campaignId && (
@@ -301,20 +422,38 @@ export function DmChat({
                     <ToolEffectCard event={m.event} />
                   </li>
                 );
-              return m.role === "user" ? (
-                <li key={m.id} className="flex justify-end">
-                  <div
-                    className="max-w-[80%] rounded-2xl rounded-br-md
-                               bg-gradient-to-br from-[var(--accent)]/20 to-amber-600/10
-                               border border-[var(--accent)]/30 text-zinc-50 px-4 py-2.5 text-sm
-                               shadow-[0_4px_22px_-10px_rgba(245,158,11,0.55)]"
-                  >
-                    {m.content}
-                  </div>
-                </li>
-              ) : (
+              if (m.kind === "scene")
+                return (
+                  <li key={m.id}>
+                    <SceneCard scene={m.scene} />
+                  </li>
+                );
+              if (m.role === "user")
+                return (
+                  <li key={m.id} className="flex justify-end">
+                    <div
+                      className="max-w-[80%] rounded-2xl rounded-br-md
+                                 bg-gradient-to-br from-[var(--accent)]/20 to-amber-600/10
+                                 border border-[var(--accent)]/30 text-zinc-50 px-4 py-2.5 text-sm
+                                 shadow-[0_4px_22px_-10px_rgba(245,158,11,0.55)]"
+                    >
+                      {m.content}
+                    </div>
+                  </li>
+                );
+              // Assistant message — apply streaming caret if it's the
+              // last one and we're still busy.
+              const isLastAssistant =
+                busy &&
+                messages
+                  .filter((x) => x.kind === "msg" && x.role === "assistant")
+                  .at(-1)?.id === m.id;
+              return (
                 <li key={m.id}>
-                  <NarrationCard content={m.content} />
+                  <NarrationCard
+                    content={m.content}
+                    streaming={isLastAssistant}
+                  />
                 </li>
               );
             })}
@@ -413,6 +552,39 @@ function SkeletonChat() {
         <div className="h-3 bg-[#2a1f15] rounded w-3/6" />
       </div>
     </div>
+  );
+}
+
+function SceneCard({ scene }: { scene: DmScene }) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <figure className="relative rounded-2xl overflow-hidden border border-[var(--border)] bg-[#1a1410]/40 my-2">
+      <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)]/60 to-transparent z-10" />
+      <div className="relative aspect-[16/9] w-full bg-zinc-900/60">
+        {!loaded && (
+          <div className="absolute inset-0 flex items-center justify-center text-xs text-[var(--muted)] animate-pulse">
+            Painting the scene…
+          </div>
+        )}
+        {/* Plain <img> instead of next/image because Pollinations sometimes
+            returns redirects + we don't need optimization for a fade-in. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={scene.image_url}
+          alt={scene.location}
+          onLoad={() => setLoaded(true)}
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
+            loaded ? "opacity-100" : "opacity-0"
+          }`}
+        />
+      </div>
+      <figcaption className="flex items-center justify-between px-4 py-2 border-t border-[var(--border)] bg-black/30 text-[11px]">
+        <span className="text-zinc-200 truncate">{scene.location}</span>
+        <span className="font-mono uppercase tracking-wider text-[var(--accent)]">
+          {scene.mood}
+        </span>
+      </figcaption>
+    </figure>
   );
 }
 
@@ -610,7 +782,13 @@ function ToolEffectCard({ event }: { event: ToolEvent }) {
   );
 }
 
-function NarrationCard({ content }: { content: string }) {
+function NarrationCard({
+  content,
+  streaming = false,
+}: {
+  content: string;
+  streaming?: boolean;
+}) {
   const isEmpty = content.length === 0;
   return (
     <div className="relative rounded-2xl border border-[var(--border)] bg-[#1a1410]/40 px-5 py-4 overflow-hidden">
@@ -634,7 +812,9 @@ function NarrationCard({ content }: { content: string }) {
           The DM considers your action…
         </div>
       ) : (
-        <MarkdownAnswer text={content} />
+        <div className={streaming ? "narration-streaming" : undefined}>
+          <MarkdownAnswer text={content} />
+        </div>
       )}
     </div>
   );

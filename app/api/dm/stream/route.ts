@@ -7,6 +7,7 @@ import {
   DM_TOOLS,
 } from "@/lib/dm";
 import { executeTool, type ToolEvent } from "@/lib/tools";
+type SceneEvent = Extract<ToolEvent, { kind: "set_scene" }>;
 import { db, type DmCharacter, type DmMessageRow } from "@/lib/db";
 import { loadDmContext, summarizeCampaignIfNeeded } from "@/lib/summarize";
 import { getUserId } from "@/lib/user";
@@ -140,6 +141,7 @@ export async function POST(req: Request) {
         const client = anthropic();
 
         let accumulatedText = "";
+        let lastScene: SceneEvent | null = null;
         const maxIterations = 6;
         for (let i = 0; i < maxIterations; i++) {
           const resp = await client.messages.create({
@@ -178,6 +180,7 @@ export async function POST(req: Request) {
                 block.input,
                 campaignId,
               );
+              if (event.kind === "set_scene") lastScene = event;
               send({ type: "tool", event });
               toolResultContent.push({
                 type: "tool_result",
@@ -204,6 +207,14 @@ export async function POST(req: Request) {
             campaign_id: campaignId,
             role: "assistant",
             content: accumulatedText,
+            scene: lastScene
+              ? {
+                  location: lastScene.location,
+                  mood: lastScene.mood,
+                  image_prompt: lastScene.image_prompt,
+                  image_url: lastScene.image_url,
+                }
+              : null,
             input_tokens: totals.input_tokens,
             output_tokens: totals.output_tokens,
             cache_read_tokens: totals.cache_read_tokens,

@@ -70,3 +70,56 @@ export function SearchIcon({ className = "" }: { className?: string }) {
     </svg>
   );
 }
+
+export function FlameIcon({
+  className = "",
+  muted = false,
+}: {
+  className?: string;
+  muted?: boolean;
+}) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill={muted ? "none" : "currentColor"}
+      fillOpacity={muted ? 0 : 0.2}
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinejoin="round"
+    >
+      <path d="M12 4c2 2.5 3.5 4.5 3.5 7a3.5 3.5 0 0 1-7 0c0-1.3.4-2.2 1.2-3-.4 1.2-1.2 2.7-1.2 4a4.5 4.5 0 1 0 9 0c0-3.5-2-6.4-5.5-10z" />
+      {muted && <path d="M5 5l14 14" strokeWidth="1.8" />}
+    </svg>
+  );
+}
+
+export function SpeakerIcon({
+  className = "",
+  muted = false,
+}: {
+  className?: string;
+  muted?: boolean;
+}) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M11 5 6 9H3v6h3l5 4z" />
+      {muted ? (
+        <path d="M16 9l5 6M21 9l-5 6" />
+      ) : (
+        <>
+          <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+          <path d="M18.5 6a8 8 0 0 1 0 12" />
+        </>
+      )}
+    </svg>
+  );
+}
