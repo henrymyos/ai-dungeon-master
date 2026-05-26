@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0a0907;
+  --foreground: #f4f1e8;
+  --muted: #a8a29e;
+  --border: #2a2520;
+  --accent: #f59e0b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html, body {
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  overflow-x: hidden;
+}
+
+/* Torchlight glow drifting in the corners — same idea as paper-summarizer
+   but warm, like firelight against a stone wall. */
+body {
+  background:
+    radial-gradient(900px 600px at 12% -10%, rgba(245, 158, 11, 0.18), transparent 60%),
+    radial-gradient(700px 500px at 100% 110%, rgba(249, 115, 22, 0.10), transparent 55%),
+    var(--background);
+  background-attachment: fixed;
+}
+
+::selection {
+  background: rgba(245, 158, 11, 0.35);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2a2520;
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #3a342d;
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.pulse-dot {
+  animation: pulse-soft 1.4s ease-in-out infinite;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
