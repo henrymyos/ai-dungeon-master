@@ -2,7 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MarkdownAnswer } from "@/components/markdown-answer";
-import { FlameIcon, MenuIcon, SendIcon, SpeakerIcon } from "@/components/icons";
+import {
+  ChatBubbleIcon,
+  FlameIcon,
+  ImageIcon,
+  MenuIcon,
+  SendIcon,
+  SpeakerIcon,
+} from "@/components/icons";
 import { useToast } from "@/components/toast";
 import type { DmMessageRow, DmScene, DmWorld } from "@/lib/db";
 import type { ToolEvent } from "@/lib/tools";
@@ -54,12 +61,27 @@ export function DmChat({
   const [shareOpen, setShareOpen] = useState(false);
   const [ttsOn, setTtsOn] = useState(false);
   const [ambientOn, setAmbientOn] = useState(false);
+  const [displayMode, setDisplayMode] = useState<"cinematic" | "chat">(
+    "cinematic",
+  );
   const ttsAvailable = isTtsAvailable();
 
   useEffect(() => {
     setTtsOn(isTtsEnabled());
     setAmbientOn(ambient.isEnabled());
+    if (typeof window !== "undefined") {
+      const stored = window.localStorage.getItem("dm_display_mode");
+      if (stored === "chat" || stored === "cinematic") setDisplayMode(stored);
+    }
   }, []);
+
+  function toggleDisplayMode() {
+    const next = displayMode === "cinematic" ? "chat" : "cinematic";
+    setDisplayMode(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("dm_display_mode", next);
+    }
+  }
 
   function toggleTts() {
     const next = !ttsOn;
@@ -386,6 +408,22 @@ export function DmChat({
         {campaignId && (
           <div className="flex items-center gap-1.5">
             <button
+              onClick={toggleDisplayMode}
+              title={
+                displayMode === "cinematic"
+                  ? "Switch to chat view"
+                  : "Switch to cinematic view"
+              }
+              aria-label="Toggle display mode"
+              className="flex items-center justify-center w-8 h-8 rounded-md border border-[var(--border)] text-[var(--muted)] hover:text-zinc-100 transition-colors"
+            >
+              {displayMode === "cinematic" ? (
+                <ChatBubbleIcon className="w-4 h-4" />
+              ) : (
+                <ImageIcon className="w-4 h-4" />
+              )}
+            </button>
+            <button
               onClick={toggleAmbient}
               title={ambientOn ? "Mute ambient" : "Play ambient soundscape"}
               aria-label={ambientOn ? "Mute ambient" : "Unmute ambient"}
@@ -435,6 +473,8 @@ export function DmChat({
           <EmptyState />
         ) : loading ? (
           <SkeletonChat />
+        ) : displayMode === "cinematic" ? (
+          <CinematicView messages={messages} busy={busy} onFork={fork} />
         ) : (
           <ul className="max-w-3xl mx-auto space-y-4">
             {messages.map((m) => {
@@ -623,6 +663,146 @@ function WorldChip({ world }: { world: DmWorld }) {
           </span>
         </>
       )}
+    </div>
+  );
+}
+
+function CinematicView({
+  messages,
+  busy,
+  onFork,
+}: {
+  messages: Message[];
+  busy: boolean;
+  onFork: (msgId: string) => void;
+}) {
+  // The "current turn" is everything since the LAST user message (inclusive).
+  // If there are no user messages yet, the current turn is just the opening
+  // narration.
+  let lastUserIdx = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.kind === "msg" && m.role === "user") {
+      lastUserIdx = i;
+      break;
+    }
+  }
+  const currentTurn = lastUserIdx >= 0 ? messages.slice(lastUserIdx) : messages;
+
+  // Latest scene anywhere in the campaign — it represents the current
+  // setting even if Claude hasn't fired set_scene in a few turns.
+  let latestScene: DmScene | null = null;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.kind === "scene") {
+      latestScene = m.scene;
+      break;
+    }
+    if (m.kind === "msg" && m.role === "assistant" && m.scene) {
+      latestScene = m.scene;
+      break;
+    }
+  }
+
+  type UserMsg = { id: string; kind: "msg"; role: "user"; content: string };
+  type AsstMsg = {
+    id: string;
+    kind: "msg";
+    role: "assistant";
+    content: string;
+    scene?: DmScene | null;
+  };
+  type ToolItem = { id: string; kind: "tool"; event: ToolEvent };
+  const isUser = (m: Message): m is UserMsg =>
+    m.kind === "msg" && m.role === "user";
+  const isAssistant = (m: Message): m is AsstMsg =>
+    m.kind === "msg" && m.role === "assistant";
+  const isTool = (m: Message): m is ToolItem => m.kind === "tool";
+
+  const userAction = currentTurn.find(isUser);
+  const toolEvents = currentTurn.filter(isTool);
+  const assistant = [...currentTurn].reverse().find(isAssistant);
+  const assistantPersistedId =
+    assistant && /^\d+$/.test(assistant.id) ? assistant.id : null;
+  const assistantIsStreaming =
+    busy && assistant != null && assistant.content.length > 0;
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-5">
+      {latestScene ? (
+        <SceneCard scene={latestScene} />
+      ) : (
+        <ScenePlaceholder />
+      )}
+
+      {userAction && (
+        <div className="rounded-2xl bg-gradient-to-br from-[var(--accent)]/15 to-amber-600/[0.06]
+                        border border-[var(--accent)]/25 text-zinc-100 px-4 py-2.5 text-sm
+                        shadow-[0_4px_22px_-12px_rgba(245,158,11,0.45)]">
+          <p className="text-[10px] uppercase tracking-wider text-[var(--accent)] mb-0.5">
+            You
+          </p>
+          {userAction.content}
+        </div>
+      )}
+
+      {toolEvents.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {toolEvents.map((t) => (
+            <ToolEffectCard key={t.id} event={t.event} />
+          ))}
+        </div>
+      )}
+
+      {assistant ? (
+        <div className="group relative rounded-2xl border border-[var(--border)] bg-[#1a1410]/40 px-5 py-5 overflow-hidden">
+          <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)]/60 to-transparent" />
+          {assistant.content.length === 0 ? (
+            <div className="flex items-center gap-3 text-sm text-[var(--muted)] py-1">
+              <span className="flex gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] pulse-dot" style={{ animationDelay: "0ms" }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] pulse-dot" style={{ animationDelay: "200ms" }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] pulse-dot" style={{ animationDelay: "400ms" }} />
+              </span>
+              The DM considers your action…
+            </div>
+          ) : (
+            <div className={assistantIsStreaming ? "narration-streaming" : undefined}>
+              <MarkdownAnswer text={assistant.content} />
+            </div>
+          )}
+          {assistantPersistedId && (
+            <button
+              onClick={() => onFork(assistantPersistedId)}
+              title="Branch a new adventure from this moment"
+              className="absolute top-2 right-2 text-[10px] uppercase tracking-wider
+                         text-[var(--muted)] hover:text-[var(--accent)] border border-[var(--border)] hover:border-[var(--accent)]/40
+                         bg-[#100c08]/80 backdrop-blur-sm px-2 py-0.5 rounded
+                         opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              Branch
+            </button>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ScenePlaceholder() {
+  return (
+    <div className="relative rounded-2xl overflow-hidden border border-[var(--border)] bg-[#1a1410]/40 aspect-[16/9]">
+      <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)]/60 to-transparent" />
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-[var(--muted)] text-sm">
+        <div
+          className="relative w-12 h-12 rounded-2xl bg-[var(--accent)]/15 border border-[var(--accent)]/30
+                     flex items-center justify-center text-[var(--accent)] text-xl
+                     shadow-[0_0_32px_-5px_rgba(245,158,11,0.55)]"
+        >
+          ✦
+        </div>
+        <p>The scene will appear once the DM sets one.</p>
+      </div>
     </div>
   );
 }
