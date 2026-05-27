@@ -1,5 +1,9 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
+export type ArcBeat = { title: string; goal: string };
+export type ArcAct = { name: string; beats: ArcBeat[] };
+export type StoryArc = { acts: ArcAct[] };
+
 export type DmCampaign = {
   id: string;
   user_id: string;
@@ -10,6 +14,21 @@ export type DmCampaign = {
   time_minutes: number;
   day_count: number;
   weather: string;
+  story_arc: StoryArc | null;
+  current_beat: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type QuestStatus = "active" | "completed" | "failed" | "abandoned";
+
+export type DmQuest = {
+  id: string;
+  campaign_id: string;
+  name: string;
+  description: string;
+  status: QuestStatus;
+  notes: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -95,6 +114,9 @@ export type DmWorld = {
   lore: DmLore[];
   statuses: DmStatus[];
   encounter: DmEncounter | null;
+  quests: DmQuest[];
+  arc: StoryArc | null;
+  current_beat: number;
 };
 
 export type DmScene = {

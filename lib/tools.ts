@@ -4,6 +4,7 @@ import {
   type DmCharacter,
   type InventoryItem,
   type NpcAttitude,
+  type QuestStatus,
   type StatusKind,
 } from "@/lib/db";
 
@@ -86,7 +87,26 @@ export type ToolEvent =
       defeated: boolean;
     }
   | { kind: "defeat_enemy"; name: string; reason: string }
-  | { kind: "end_encounter"; outcome: string; remaining: number };
+  | { kind: "end_encounter"; outcome: string; remaining: number }
+  | {
+      kind: "record_quest";
+      name: string;
+      description: string;
+      isNew: boolean;
+    }
+  | {
+      kind: "update_quest_status";
+      name: string;
+      status: QuestStatus;
+      found: boolean;
+    }
+  | {
+      kind: "advance_arc";
+      new_beat: number;
+      beat_title: string | null;
+      total_beats: number;
+      note: string | null;
+    };
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n));
@@ -652,6 +672,88 @@ export async function executeTool(
         .update({ is_active: false, hp: 0 })
         .eq("id", enemy.id);
       return { kind: "defeat_enemy", name: enemy.name, reason };
+    }
+    case "record_quest": {
+      const qName = String(args.name ?? "").trim();
+      const description = String(args.description ?? "").trim();
+      if (!qName || !description) throw new Error("Quest needs name + description");
+      const admin = db();
+      const { data: existing } = await admin
+        .from("dm_quests")
+        .select("id")
+        .eq("campaign_id", campaignId)
+        .ilike("name", qName)
+        .maybeSingle();
+      if (existing) {
+        await admin
+          .from("dm_quests")
+          .update({ description, updated_at: new Date().toISOString() })
+          .eq("id", existing.id);
+        return { kind: "record_quest", name: qName, description, isNew: false };
+      }
+      await admin
+        .from("dm_quests")
+        .insert({ campaign_id: campaignId, name: qName, description });
+      return { kind: "record_quest", name: qName, description, isNew: true };
+    }
+    case "update_quest_status": {
+      const qName = String(args.name ?? "").trim();
+      const statusRaw = String(args.status ?? "active");
+      const valid: QuestStatus[] = ["active", "completed", "failed", "abandoned"];
+      const status: QuestStatus = valid.includes(statusRaw as QuestStatus)
+        ? (statusRaw as QuestStatus)
+        : "active";
+      const notes = typeof args.notes === "string" ? args.notes : null;
+      const admin = db();
+      const { data: existing } = await admin
+        .from("dm_quests")
+        .select("id")
+        .eq("campaign_id", campaignId)
+        .ilike("name", qName)
+        .maybeSingle();
+      if (!existing)
+        return { kind: "update_quest_status", name: qName, status, found: false };
+      await admin
+        .from("dm_quests")
+        .update({
+          status,
+          notes: notes ?? undefined,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id);
+      return { kind: "update_quest_status", name: qName, status, found: true };
+    }
+    case "advance_arc": {
+      const note = typeof args.note === "string" ? args.note : null;
+      const admin = db();
+      const { data: cam } = await admin
+        .from("dm_campaigns")
+        .select("current_beat, story_arc")
+        .eq("id", campaignId)
+        .single();
+      if (!cam) throw new Error("Campaign missing");
+      const arc = cam.story_arc as
+        | { acts: { name: string; beats: { title: string; goal: string }[] }[] }
+        | null;
+      const flatBeats = arc
+        ? arc.acts.flatMap((a) => a.beats.map((b) => b.title))
+        : [];
+      const total = flatBeats.length;
+      const nextBeat = Math.min((cam.current_beat ?? 0) + 1, Math.max(total, 1));
+      await admin
+        .from("dm_campaigns")
+        .update({
+          current_beat: nextBeat,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", campaignId);
+      return {
+        kind: "advance_arc",
+        new_beat: nextBeat,
+        beat_title: flatBeats[nextBeat] ?? null,
+        total_beats: total,
+        note,
+      };
     }
     case "end_encounter": {
       const outcome = String(args.outcome ?? "resolved").trim() || "resolved";

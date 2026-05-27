@@ -6,8 +6,10 @@ import {
   type DmLocation,
   type DmLore,
   type DmNpc,
+  type DmQuest,
   type DmStatus,
   type DmWorld,
+  type StoryArc,
 } from "@/lib/db";
 
 const RECENT_LORE_LIMIT = 12;
@@ -22,10 +24,11 @@ export async function loadWorld(campaignId: string): Promise<DmWorld | null> {
     { data: lore },
     { data: character },
     { data: encounter },
+    { data: quests },
   ] = await Promise.all([
     admin
       .from("dm_campaigns")
-      .select("time_minutes, day_count, weather")
+      .select("time_minutes, day_count, weather, story_arc, current_beat")
       .eq("id", campaignId)
       .single(),
     admin
@@ -59,6 +62,11 @@ export async function loadWorld(campaignId: string): Promise<DmWorld | null> {
       .eq("campaign_id", campaignId)
       .eq("status", "active")
       .maybeSingle(),
+    admin
+      .from("dm_quests")
+      .select("id, campaign_id, name, description, status, notes, created_at, updated_at")
+      .eq("campaign_id", campaignId)
+      .order("updated_at", { ascending: false }),
   ]);
   if (!campaign) return null;
 
@@ -117,6 +125,9 @@ export async function loadWorld(campaignId: string): Promise<DmWorld | null> {
     lore: (lore ?? []) as DmLore[],
     statuses,
     encounter: activeEncounter,
+    quests: (quests ?? []) as DmQuest[],
+    arc: (campaign.story_arc ?? null) as StoryArc | null,
+    current_beat: campaign.current_beat ?? 0,
   };
 }
 
@@ -145,6 +156,33 @@ export function worldStateForPrompt(world: DmWorld): string {
     `Time: Day ${world.day_count}, ${formatTime(world.time_minutes)} (${describeTimeOfDay(world.time_minutes)})`,
   );
   lines.push(`Weather: ${world.weather}`);
+
+  // Hidden story arc — the DM sees the current and next beat goals.
+  if (world.arc && world.arc.acts.length > 0) {
+    const flat = world.arc.acts.flatMap((a) =>
+      a.beats.map((b) => ({ act: a.name, ...b })),
+    );
+    const currentIdx = Math.min(world.current_beat, Math.max(flat.length - 1, 0));
+    const cur = flat[currentIdx];
+    const next = flat[currentIdx + 1];
+    lines.push("");
+    lines.push(
+      `[HIDDEN DM NOTES — do not narrate verbatim, just nudge toward]`,
+    );
+    if (cur) lines.push(`Current beat (${cur.act}): ${cur.title} — ${cur.goal}`);
+    if (next)
+      lines.push(`Next beat (${next.act}): ${next.title} — ${next.goal}`);
+    if (!next)
+      lines.push(`This is the final beat. When resolved, close the campaign.`);
+  }
+
+  if (world.quests.filter((q) => q.status === "active").length > 0) {
+    lines.push("");
+    lines.push("Active quests:");
+    for (const q of world.quests.filter((q) => q.status === "active")) {
+      lines.push(`- ${q.name}: ${q.description}`);
+    }
+  }
 
   if (world.statuses.length > 0) {
     lines.push("");

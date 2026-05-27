@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { DmWorld, NpcAttitude } from "@/lib/db";
+import type { DmWorld, NpcAttitude, QuestStatus } from "@/lib/db";
 
 const ATTITUDE_COLOR: Record<NpcAttitude, string> = {
   friendly: "text-emerald-400",
@@ -12,18 +12,53 @@ const ATTITUDE_COLOR: Record<NpcAttitude, string> = {
   fearful: "text-violet-300",
 };
 
+const QUEST_TONE: Record<QuestStatus, string> = {
+  active: "text-[var(--accent)]",
+  completed: "text-emerald-400",
+  failed: "text-red-400",
+  abandoned: "text-zinc-500 line-through",
+};
+
 export function WorldPanel({ world }: { world: DmWorld | null }) {
   if (!world) return null;
   const hasAny =
     world.npcs.length > 0 ||
     world.locations.length > 0 ||
-    world.lore.length > 0;
+    world.lore.length > 0 ||
+    world.quests.length > 0;
   if (!hasAny) return null;
   return (
     <div className="border-t border-[var(--border)] px-4 py-3 space-y-2 text-xs">
       <p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">
         World
       </p>
+      {world.quests.length > 0 && (
+        <Section title={`Quests · ${world.quests.filter((q) => q.status === "active").length} active`}>
+          <ul className="space-y-1.5">
+            {world.quests.slice(0, 12).map((q) => (
+              <li
+                key={q.id}
+                className="leading-snug border-l-2 border-[var(--border)] pl-2"
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <span
+                    className={`font-medium truncate ${QUEST_TONE[q.status]}`}
+                  >
+                    {q.name}
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wider text-[var(--muted)] shrink-0">
+                    {q.status}
+                  </span>
+                </div>
+                <p className="text-[11px] text-[var(--muted)] line-clamp-2">
+                  {q.description}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
       {world.npcs.length > 0 && (
         <Section title={`NPCs · ${world.npcs.length}`}>
           <ul className="space-y-1.5">

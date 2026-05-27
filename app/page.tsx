@@ -151,7 +151,10 @@ function PageInner() {
       evt.kind === "advance_time" ||
       evt.kind === "record_npc" ||
       evt.kind === "record_location" ||
-      evt.kind === "record_lore"
+      evt.kind === "record_lore" ||
+      evt.kind === "record_quest" ||
+      evt.kind === "update_quest_status" ||
+      evt.kind === "advance_arc"
     ) {
       setWorld((prev) => {
         if (!prev) return prev;
@@ -231,6 +234,43 @@ function PageInner() {
             ],
           };
         }
+        if (evt.kind === "record_quest") {
+          const now = new Date().toISOString();
+          const existing = prev.quests.findIndex(
+            (q) => q.name.toLowerCase() === evt.name.toLowerCase(),
+          );
+          const next = [...prev.quests];
+          if (existing >= 0) {
+            next[existing] = {
+              ...next[existing],
+              description: evt.description,
+              updated_at: now,
+            };
+          } else {
+            next.unshift({
+              id: `tmp-${Date.now()}`,
+              campaign_id: prev.quests[0]?.campaign_id ?? "",
+              name: evt.name,
+              description: evt.description,
+              status: "active",
+              notes: null,
+              created_at: now,
+              updated_at: now,
+            });
+          }
+          return { ...prev, quests: next };
+        }
+        if (evt.kind === "update_quest_status") {
+          const next = prev.quests.map((q) =>
+            q.name.toLowerCase() === evt.name.toLowerCase()
+              ? { ...q, status: evt.status, updated_at: new Date().toISOString() }
+              : q,
+          );
+          return { ...prev, quests: next };
+        }
+        if (evt.kind === "advance_arc") {
+          return { ...prev, current_beat: evt.new_beat };
+        }
         return prev;
       });
     }
@@ -276,6 +316,11 @@ function PageInner() {
           await refreshUsage();
         }}
         onShareTokenChanged={refresh}
+        onForked={async (newId) => {
+          await refresh();
+          setActiveId(newId);
+          setSidebarOpen(false);
+        }}
       />
     </div>
   );

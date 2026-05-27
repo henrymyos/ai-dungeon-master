@@ -25,6 +25,7 @@ type Props = {
   onToolEvent?: (evt: ToolEvent) => void;
   onStreamEnd?: () => void;
   onShareTokenChanged?: () => void;
+  onForked?: (newCampaignId: string) => void;
 };
 
 type Message =
@@ -48,6 +49,7 @@ export function DmChat({
   onToolEvent,
   onStreamEnd,
   onShareTokenChanged,
+  onForked,
 }: Props) {
   const [shareOpen, setShareOpen] = useState(false);
   const [ttsOn, setTtsOn] = useState(false);
@@ -339,6 +341,24 @@ export function DmChat({
     cancelSpeech();
   }
 
+  async function fork(messageId: string) {
+    if (!campaignId) return;
+    try {
+      const res = await fetch(
+        `/api/campaigns/${campaignId}/fork-from/${messageId}`,
+        { method: "POST" },
+      );
+      if (!res.ok) throw new Error("Fork failed");
+      const { campaign } = (await res.json()) as {
+        campaign: { id: string };
+      };
+      toast.success("Branched. Switching to the new adventure…");
+      onForked?.(campaign.id);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Fork failed.");
+    }
+  }
+
   return (
     <section className="flex-1 flex flex-col min-w-0">
       <header className="px-4 md:px-6 py-4 border-b border-[var(--border)] flex items-center gap-3">
@@ -450,11 +470,15 @@ export function DmChat({
                 messages
                   .filter((x) => x.kind === "msg" && x.role === "assistant")
                   .at(-1)?.id === m.id;
+              // Persisted messages have plain-numeric ids (from dm_messages
+              // bigserial); transient mid-stream ones look like "a-12345".
+              const persistedId = /^\d+$/.test(m.id) ? m.id : null;
               return (
                 <li key={m.id}>
                   <NarrationCard
                     content={m.content}
                     streaming={isLastAssistant}
+                    onFork={persistedId ? () => fork(persistedId) : undefined}
                   />
                 </li>
               );
@@ -575,8 +599,12 @@ function formatTime(mins: number) {
 
 function WorldChip({ world }: { world: DmWorld }) {
   const glyph = WEATHER_GLYPH[world.weather] ?? "·";
+  const totalBeats = world.arc
+    ? world.arc.acts.reduce((a, act) => a + act.beats.length, 0)
+    : 0;
+  const beatNum = Math.min(world.current_beat + 1, Math.max(totalBeats, 1));
   return (
-    <div className="mt-0.5 text-[11px] text-[var(--muted)] flex items-center gap-1.5">
+    <div className="mt-0.5 text-[11px] text-[var(--muted)] flex items-center gap-1.5 flex-wrap">
       <span className="text-[var(--accent)]">Day {world.day_count}</span>
       <span aria-hidden>·</span>
       <span className="font-mono tabular-nums">{formatTime(world.time_minutes)}</span>
@@ -584,6 +612,17 @@ function WorldChip({ world }: { world: DmWorld }) {
       <span title={world.weather}>
         {glyph} {world.weather}
       </span>
+      {totalBeats > 0 && (
+        <>
+          <span aria-hidden>·</span>
+          <span
+            title="Hidden story arc progress"
+            className="font-mono uppercase tracking-wider text-[10px]"
+          >
+            beat {beatNum}/{totalBeats}
+          </span>
+        </>
+      )}
     </div>
   );
 }
@@ -830,6 +869,22 @@ function ToolEffectCard({ event }: { event: ToolEvent }) {
     glyph = "🏁";
     tone = "good";
     title = `Encounter ends — ${event.outcome}`;
+  } else if (event.kind === "record_quest") {
+    glyph = "📜";
+    tone = "good";
+    title = `${event.isNew ? "New quest" : "Quest updated"} — ${event.name}`;
+  } else if (event.kind === "update_quest_status") {
+    glyph =
+      event.status === "completed"
+        ? "✅"
+        : event.status === "failed"
+          ? "❌"
+          : "📜";
+    tone = event.status === "completed" ? "good" : event.status === "failed" ? "bad" : "default";
+    title = `${event.name} — ${event.status}`;
+  } else if (event.kind === "advance_arc") {
+    glyph = "🎭";
+    title = `Story beat ${event.new_beat}/${event.total_beats}${event.beat_title ? ` — ${event.beat_title}` : ""}`;
   }
 
   const ring =
@@ -859,13 +914,15 @@ function ToolEffectCard({ event }: { event: ToolEvent }) {
 function NarrationCard({
   content,
   streaming = false,
+  onFork,
 }: {
   content: string;
   streaming?: boolean;
+  onFork?: () => void;
 }) {
   const isEmpty = content.length === 0;
   return (
-    <div className="relative rounded-2xl border border-[var(--border)] bg-[#1a1410]/40 px-5 py-4 overflow-hidden">
+    <div className="group relative rounded-2xl border border-[var(--border)] bg-[#1a1410]/40 px-5 py-4 overflow-hidden">
       <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)]/60 to-transparent" />
       {isEmpty ? (
         <div className="flex items-center gap-3 text-sm text-[var(--muted)] py-1">
@@ -889,6 +946,18 @@ function NarrationCard({
         <div className={streaming ? "narration-streaming" : undefined}>
           <MarkdownAnswer text={content} />
         </div>
+      )}
+      {onFork && (
+        <button
+          onClick={onFork}
+          title="Branch a new adventure from this moment"
+          className="absolute top-2 right-2 text-[10px] uppercase tracking-wider
+                     text-[var(--muted)] hover:text-[var(--accent)] border border-[var(--border)] hover:border-[var(--accent)]/40
+                     bg-[#100c08]/80 backdrop-blur-sm px-2 py-0.5 rounded
+                     opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          Branch
+        </button>
       )}
     </div>
   );

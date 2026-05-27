@@ -25,6 +25,11 @@ Status effects (conditions, buffs, debuffs, lasting injuries):
 - apply_status_effect — when something has happened that should linger past this turn: poisoned, blessed, exhausted, blinded, drunk, OR a lasting injury from a critical failure ("Twisted Ankle", "Cracked Rib"). Set kind='injury' for things that need a healer; kind='condition' for things that persist until a clear narrative change; kind='buff' or 'debuff' for timed effects (provide duration_minutes).
 - clear_status_effect — when the player rests, drinks an antidote, sees a healer, or otherwise gets rid of an effect. Reference it by exact name.
 
+Story:
+- record_quest — when the player commits to a goal worth tracking (a deal struck, a stolen object to recover, a place to reach). Don't track every minor errand. Persists across turns; reference by name later.
+- update_quest_status — mark a quest completed / failed / abandoned when the narrative resolves it.
+- advance_arc — the campaign has a hidden 3-act plan. When the player reaches the goal of the CURRENT beat, advance to the next one. You see the next beat's goal in the world state. Don't railroad — let the player approach it naturally; this tool just tells the system to move on.
+
 Combat encounters:
 - start_encounter — only when real combat begins (not every tense moment). Lists the enemies and their HP. Set the mood to "combat" via set_scene at the same time.
 - damage_enemy — when a player attack lands. Reference the enemy by name.
@@ -188,6 +193,55 @@ export const DM_TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ["item"],
+    },
+  },
+  {
+    name: "record_quest",
+    description:
+      "Start tracking a goal the player has taken on. Use only for goals worth remembering, not micro-errands.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Short label." },
+        description: {
+          type: "string",
+          description: "1–2 sentence summary of what success looks like.",
+        },
+      },
+      required: ["name", "description"],
+    },
+  },
+  {
+    name: "update_quest_status",
+    description: "Mark an existing quest completed / failed / abandoned.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        status: {
+          type: "string",
+          enum: ["active", "completed", "failed", "abandoned"],
+        },
+        notes: {
+          type: "string",
+          description: "Optional: what happened.",
+        },
+      },
+      required: ["name", "status"],
+    },
+  },
+  {
+    name: "advance_arc",
+    description:
+      "Move the campaign to the next beat in its hidden 3-act story arc. Call only when the current beat's goal has been meaningfully achieved.",
+    input_schema: {
+      type: "object",
+      properties: {
+        note: {
+          type: "string",
+          description: "Optional: a line of internal DM note about how it happened.",
+        },
+      },
     },
   },
   {
