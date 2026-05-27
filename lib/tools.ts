@@ -7,6 +7,7 @@ import {
   type QuestStatus,
   type StatusKind,
 } from "@/lib/db";
+import { generateScene } from "@/lib/imagegen";
 
 /** Result of a single tool invocation. The shape is what we send back to
  *  Claude as the tool_result content AND what we emit to the client as a
@@ -243,17 +244,10 @@ export async function executeTool(
       ];
       const safeMood: SceneMood = validMoods.includes(mood) ? mood : "calm";
       const prompt = String(args.image_prompt ?? "").trim();
-      // Pollinations.ai — free, no auth, supports flux. We add stylistic
-      // suffixes for a consistent dark-fantasy painterly look and a fixed
-      // seed seeded by the prompt so reload renders the same image.
-      const styled = `${prompt}, dark fantasy concept art, painterly, atmospheric, cinematic lighting, no text, no watermark`;
-      const seed = Array.from(prompt).reduce(
-        (a, c) => (a * 31 + c.charCodeAt(0)) >>> 0,
-        7,
-      );
-      const image_url = `https://image.pollinations.ai/prompt/${encodeURIComponent(
-        styled,
-      )}?width=768&height=432&model=flux&nologo=true&private=true&seed=${seed}`;
+      // Generate via Together AI FLUX-schnell (~1–3s) and cache the
+      // result in Supabase Storage. Falls back to Pollinations if no key
+      // is set or the API fails.
+      const image_url = await generateScene(prompt, campaignId);
       return {
         kind: "set_scene",
         location,
