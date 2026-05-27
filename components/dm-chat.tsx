@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { MarkdownAnswer } from "@/components/markdown-answer";
 import { FlameIcon, MenuIcon, SendIcon, SpeakerIcon } from "@/components/icons";
 import { useToast } from "@/components/toast";
-import type { DmMessageRow, DmScene } from "@/lib/db";
+import type { DmMessageRow, DmScene, DmWorld } from "@/lib/db";
 import type { ToolEvent } from "@/lib/tools";
 import {
   cancelSpeech,
@@ -19,6 +19,7 @@ type Props = {
   campaignId: string | null;
   campaignTitle: string;
   shareToken: string | null;
+  world: DmWorld | null;
   onOpenSidebar: () => void;
   onCampaignChanged?: () => void;
   onToolEvent?: (evt: ToolEvent) => void;
@@ -41,6 +42,7 @@ export function DmChat({
   campaignId,
   campaignTitle,
   shareToken,
+  world,
   onOpenSidebar,
   onCampaignChanged,
   onToolEvent,
@@ -351,11 +353,15 @@ export function DmChat({
           <h2 className="text-sm font-medium truncate">
             {campaignId ? campaignTitle : "AI Dungeon Master"}
           </h2>
-          <p className="text-[11px] text-[var(--muted)]">
-            {campaignId
-              ? "A foggy forest at dusk"
-              : "Pick an adventure on the left, or start a new one"}
-          </p>
+          {campaignId && world ? (
+            <WorldChip world={world} />
+          ) : (
+            <p className="text-[11px] text-[var(--muted)]">
+              {campaignId
+                ? "A foggy forest at dusk"
+                : "Pick an adventure on the left, or start a new one"}
+            </p>
+          )}
         </div>
         {campaignId && (
           <div className="flex items-center gap-1.5">
@@ -547,6 +553,37 @@ function SkeletonChat() {
         <div className="h-3 bg-[#2a1f15] rounded w-4/6 mb-2" />
         <div className="h-3 bg-[#2a1f15] rounded w-3/6" />
       </div>
+    </div>
+  );
+}
+
+const WEATHER_GLYPH: Record<string, string> = {
+  clear: "☀",
+  cloudy: "☁",
+  fog: "🌫",
+  rain: "🌧",
+  storm: "⛈",
+  snow: "❄",
+  wind: "🌬",
+};
+
+function formatTime(mins: number) {
+  const h = Math.floor((mins % 1440) / 60);
+  const m = mins % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function WorldChip({ world }: { world: DmWorld }) {
+  const glyph = WEATHER_GLYPH[world.weather] ?? "·";
+  return (
+    <div className="mt-0.5 text-[11px] text-[var(--muted)] flex items-center gap-1.5">
+      <span className="text-[var(--accent)]">Day {world.day_count}</span>
+      <span aria-hidden>·</span>
+      <span className="font-mono tabular-nums">{formatTime(world.time_minutes)}</span>
+      <span aria-hidden>·</span>
+      <span title={world.weather}>
+        {glyph} {world.weather}
+      </span>
     </div>
   );
 }

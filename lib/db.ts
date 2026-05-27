@@ -7,8 +7,57 @@ export type DmCampaign = {
   summary: string | null;
   summary_through_message_id: number | null;
   share_token: string | null;
+  time_minutes: number;
+  day_count: number;
+  weather: string;
   created_at: string;
   updated_at: string;
+};
+
+export type NpcAttitude =
+  | "friendly"
+  | "hostile"
+  | "neutral"
+  | "suspicious"
+  | "allied"
+  | "fearful";
+
+export type DmNpc = {
+  id: string;
+  campaign_id: string;
+  name: string;
+  description: string;
+  attitude: NpcAttitude;
+  relationship: number;
+  notes: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
+};
+
+export type DmLocation = {
+  id: string;
+  campaign_id: string;
+  name: string;
+  description: string;
+  notes: string | null;
+  first_visited_at: string;
+  last_visited_at: string;
+};
+
+export type DmLore = {
+  id: number;
+  campaign_id: string;
+  fact: string;
+  created_at: string;
+};
+
+export type DmWorld = {
+  time_minutes: number;
+  day_count: number;
+  weather: string;
+  npcs: DmNpc[];
+  locations: DmLocation[];
+  lore: DmLore[];
 };
 
 export type DmScene = {

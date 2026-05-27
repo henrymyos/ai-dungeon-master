@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import type { DmCampaign, DmCharacter } from "@/lib/db";
+import type { DmCampaign, DmCharacter, DmWorld } from "@/lib/db";
 import { CloseIcon, TrashIcon } from "@/components/icons";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CharacterSheet } from "@/components/character-sheet";
+import { WorldPanel } from "@/components/world-panel";
 import { formatCost } from "@/lib/pricing";
 
 type UsageSummary = {
@@ -25,6 +26,7 @@ type Props = {
   creating: boolean;
   open: boolean;
   character: DmCharacter | null;
+  world: DmWorld | null;
   usage: UsageSummary | null;
   onSelect: (id: string) => void;
   onNew: () => void;
@@ -40,6 +42,7 @@ export function Sidebar({
   creating,
   open,
   character,
+  world,
   usage,
   onSelect,
   onNew,
@@ -140,6 +143,7 @@ export function Sidebar({
             onUpdate={onCharacterUpdate}
           />
         )}
+        {activeId && <WorldPanel world={world} />}
         <UsageFooter usage={usage} />
 
         <ConfirmDialog

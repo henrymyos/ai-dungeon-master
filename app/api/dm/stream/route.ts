@@ -2,7 +2,8 @@ import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import {
   anthropic,
-  buildSystemPrompt,
+  buildStaticSystemPrompt,
+  buildDynamicStateBlock,
   DM_MODEL,
   DM_TOOLS,
 } from "@/lib/dm";
@@ -10,6 +11,7 @@ import { executeTool, type ToolEvent } from "@/lib/tools";
 type SceneEvent = Extract<ToolEvent, { kind: "set_scene" }>;
 import { db, type DmCharacter, type DmMessageRow } from "@/lib/db";
 import { loadDmContext, summarizeCampaignIfNeeded } from "@/lib/summarize";
+import { loadWorld } from "@/lib/world";
 import { getUserId } from "@/lib/user";
 
 export const runtime = "nodejs";
@@ -94,6 +96,10 @@ export async function POST(req: Request) {
   }
 
   const { recap, recent } = await loadDmContext(campaignId);
+  // World state — loaded once per turn. Tools that mutate world state
+  // (record_npc, advance_time, etc.) feed their effects back to Claude
+  // via tool_results, which is sufficient mid-turn coherence.
+  const world = await loadWorld(campaignId);
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -130,12 +136,17 @@ export async function POST(req: Request) {
           messages.push({ role: m.role, content: m.content });
         }
 
-        const system = [
+        // Split: cache the static instructions block (stable), then
+        // append the dynamic state without a cache_control so it doesn't
+        // poison the cache when HP / NPCs / time change between turns.
+        const dynamic = buildDynamicStateBlock(character, world);
+        const system: Anthropic.TextBlockParam[] = [
           {
-            type: "text" as const,
-            text: buildSystemPrompt(character),
-            cache_control: { type: "ephemeral" as const },
+            type: "text",
+            text: buildStaticSystemPrompt(),
+            cache_control: { type: "ephemeral" },
           },
+          ...(dynamic ? [{ type: "text" as const, text: dynamic }] : []),
         ];
 
         const client = anthropic();
