@@ -21,6 +21,16 @@ Player state:
 Scene:
 - set_scene — when the scene meaningfully changes: a new location, dramatic reveal, arrival of a notable figure, shift from peace to combat. Call AT THE START of the turn with a vivid 1–2 sentence image_prompt.
 
+Status effects (conditions, buffs, debuffs, lasting injuries):
+- apply_status_effect — when something has happened that should linger past this turn: poisoned, blessed, exhausted, blinded, drunk, OR a lasting injury from a critical failure ("Twisted Ankle", "Cracked Rib"). Set kind='injury' for things that need a healer; kind='condition' for things that persist until a clear narrative change; kind='buff' or 'debuff' for timed effects (provide duration_minutes).
+- clear_status_effect — when the player rests, drinks an antidote, sees a healer, or otherwise gets rid of an effect. Reference it by exact name.
+
+Combat encounters:
+- start_encounter — only when real combat begins (not every tense moment). Lists the enemies and their HP. Set the mood to "combat" via set_scene at the same time.
+- damage_enemy — when a player attack lands. Reference the enemy by name.
+- defeat_enemy — when an enemy is killed, knocked out, or flees.
+- end_encounter — when combat is resolved. Provide an outcome string (e.g. "victory", "fled", "negotiated").
+
 World state (use these to keep long campaigns coherent):
 - record_npc — the first time the player learns a notable character's name, OR when an existing NPC's attitude/relationship has meaningfully shifted. Don't record every random villager — only people the player might encounter again.
 - record_location — when the player visits a distinct, notable place worth remembering (a town, dungeon, landmark, shop). Not every clearing.
@@ -54,6 +64,10 @@ export function buildDynamicStateBlock(
         .map((i) => `${i.item}${i.quantity > 1 ? ` (×${i.quantity})` : ""}`)
         .join(", ") || "nothing";
     const attrs = character.attributes;
+    const skills =
+      character.skills && character.skills.length > 0
+        ? character.skills.map((s) => `${s.name} ${s.level}`).join(", ")
+        : "none yet";
     parts.push(
       [
         "## Player character (live state — keep narration consistent with this)",
@@ -61,6 +75,7 @@ export function buildDynamicStateBlock(
         `Class: ${character.class}`,
         `HP: ${character.hp} / ${character.max_hp}`,
         `Attributes: STR ${attrs.strength} · DEX ${attrs.dexterity} · WITS ${attrs.wits}`,
+        `Trained skills (pass skill_name to roll_dice when relevant): ${skills}`,
         `Carrying: ${inv}`,
       ].join("\n"),
     );
@@ -109,6 +124,17 @@ export const DM_TOOLS: Anthropic.Tool[] = [
         reason: {
           type: "string",
           description: "Short label for what this roll is for, e.g. 'stealth check' or 'sword attack'.",
+        },
+        advantage: {
+          type: "string",
+          enum: ["normal", "advantage", "disadvantage"],
+          description:
+            "For d20 single rolls: 'advantage' rolls 2d20 and keeps the higher; 'disadvantage' keeps the lower. Use advantage when the player has a favorable angle (a sneak attack, a held weapon at the ready, an NPC who likes them), disadvantage when conditions hurt (poisoned, blinded, fighting uphill). Default 'normal'.",
+        },
+        skill_name: {
+          type: "string",
+          description:
+            "If this roll uses a skill the player has trained, pass its exact name (e.g. 'Stealth', 'Lockpicking'). The skill's level is added to the roll automatically.",
         },
       },
       required: ["sides", "reason"],
@@ -162,6 +188,110 @@ export const DM_TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ["item"],
+    },
+  },
+  {
+    name: "apply_status_effect",
+    description:
+      "Attach a status effect to the player — a condition, buff, debuff, or lasting injury. Replaces an existing status with the same name.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Short label, e.g. 'Poisoned', 'Twisted Ankle', 'Blessed'." },
+        kind: {
+          type: "string",
+          enum: ["debuff", "buff", "condition", "injury"],
+          description:
+            "'debuff' / 'buff' are timed effects; 'condition' persists until a narrative reason ends it; 'injury' is a lasting scar that needs healing.",
+        },
+        description: {
+          type: "string",
+          description:
+            "1 sentence: what it does mechanically + narratively, e.g. '-2 to DEX rolls; the wound throbs when you run.'",
+        },
+        duration_minutes: {
+          type: "integer",
+          description:
+            "Optional: in-game minutes before the effect expires automatically. Omit for conditions/injuries that need explicit removal.",
+        },
+      },
+      required: ["name", "kind", "description"],
+    },
+  },
+  {
+    name: "clear_status_effect",
+    description: "Remove an active status by exact name.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+      },
+      required: ["name"],
+    },
+  },
+  {
+    name: "start_encounter",
+    description:
+      "Begin a combat encounter. Use only when real combat starts — not every tense moment. Lists each enemy with starting HP.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Short label, e.g. 'Goblin ambush'." },
+        description: { type: "string" },
+        enemies: {
+          type: "array",
+          description: "Each enemy: { name, hp, description? }.",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              hp: { type: "integer" },
+              description: { type: "string" },
+            },
+            required: ["name", "hp"],
+          },
+        },
+      },
+      required: ["name", "enemies"],
+    },
+  },
+  {
+    name: "damage_enemy",
+    description:
+      "Deal damage to a named enemy in the active encounter. Negative amounts heal (rare). Reference enemies by the names you assigned in start_encounter; case insensitive substring match.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        amount: { type: "integer", description: "Damage to deal. Use positive numbers." },
+        reason: { type: "string" },
+      },
+      required: ["name", "amount", "reason"],
+    },
+  },
+  {
+    name: "defeat_enemy",
+    description:
+      "Mark an enemy as no longer active (killed, knocked out, fled). Use when the result is decisive — for a brief stagger, just call damage_enemy.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        reason: { type: "string" },
+      },
+      required: ["name"],
+    },
+  },
+  {
+    name: "end_encounter",
+    description:
+      "Close the active encounter. Provide an outcome (victory / fled / negotiated / etc.).",
+    input_schema: {
+      type: "object",
+      properties: {
+        outcome: { type: "string" },
+      },
+      required: ["outcome"],
     },
   },
   {

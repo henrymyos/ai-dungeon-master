@@ -770,12 +770,23 @@ function ToolEffectCard({ event }: { event: ToolEvent }) {
 
   if (event.kind === "roll_dice") {
     glyph = "🎲";
-    const rollText =
-      event.rolls.length > 1
-        ? `${event.rolls.join(" + ")} = ${event.total}`
-        : `${event.total}`;
-    title = `${event.count}d${event.sides} — ${event.reason}`;
-    detail = rollText;
+    const advLabel =
+      event.advantage === "advantage"
+        ? " · ADV"
+        : event.advantage === "disadvantage"
+          ? " · DIS"
+          : "";
+    const skillLabel = event.skill_name
+      ? ` · ${event.skill_name}${event.skill_bonus ? ` +${event.skill_bonus}` : ""}`
+      : "";
+    title = `${event.count}d${event.sides} — ${event.reason}${advLabel}${skillLabel}`;
+    if (event.advantage !== "normal" && event.rolls.length === 2) {
+      detail = `[${event.rolls.join(", ")}] → ${event.total}`;
+    } else if (event.rolls.length > 1) {
+      detail = `${event.rolls.join(" + ")} = ${event.total}`;
+    } else {
+      detail = `${event.total}`;
+    }
   } else if (event.kind === "update_hp") {
     const dmg = event.delta < 0;
     glyph = dmg ? "💢" : "✚";
@@ -789,6 +800,36 @@ function ToolEffectCard({ event }: { event: ToolEvent }) {
   } else if (event.kind === "remove_item") {
     glyph = "🪤";
     title = `Lost ${event.item}${event.quantity > 1 ? ` ×${event.quantity}` : ""}`;
+  } else if (event.kind === "apply_status_effect") {
+    const buff = event.effect_kind === "buff";
+    glyph = buff ? "🌟" : event.effect_kind === "injury" ? "🩹" : "🌀";
+    tone = buff ? "good" : "bad";
+    title = `${event.effect_kind.toUpperCase()} · ${event.name}`;
+    detail = event.duration_minutes
+      ? `${event.duration_minutes} min`
+      : "until cleared";
+  } else if (event.kind === "clear_status_effect") {
+    glyph = "✨";
+    tone = "good";
+    title = `${event.cleared ? "Cleared" : "Tried to clear"} ${event.name}`;
+  } else if (event.kind === "start_encounter") {
+    glyph = "⚔️";
+    tone = "bad";
+    title = `Encounter — ${event.encounter}`;
+    detail = `${event.enemies.length} foe${event.enemies.length === 1 ? "" : "s"}`;
+  } else if (event.kind === "damage_enemy") {
+    glyph = event.defeated ? "💀" : "🗡️";
+    tone = "bad";
+    title = `${event.name} ${event.defeated ? "defeated" : `took ${event.amount}`} · ${event.reason}`;
+    if (!event.defeated) detail = `${event.hp}/${event.max_hp}`;
+  } else if (event.kind === "defeat_enemy") {
+    glyph = "💀";
+    tone = "bad";
+    title = `${event.name} defeated`;
+  } else if (event.kind === "end_encounter") {
+    glyph = "🏁";
+    tone = "good";
+    title = `Encounter ends — ${event.outcome}`;
   }
 
   const ring =

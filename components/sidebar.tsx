@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import type { DmCampaign, DmCharacter, DmWorld } from "@/lib/db";
+import type {
+  DmCampaign,
+  DmCharacter,
+  DmEncounter,
+  DmWorld,
+} from "@/lib/db";
 import { CloseIcon, TrashIcon } from "@/components/icons";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CharacterSheet } from "@/components/character-sheet";
@@ -139,9 +144,13 @@ export function Sidebar({
         {activeId && character && (
           <CharacterSheet
             character={character}
+            statuses={world?.statuses ?? []}
             campaignId={activeId}
             onUpdate={onCharacterUpdate}
           />
+        )}
+        {activeId && world?.encounter && (
+          <EncounterCard encounter={world.encounter} />
         )}
         {activeId && <WorldPanel world={world} />}
         <UsageFooter usage={usage} />
@@ -223,6 +232,58 @@ function SkeletonRows() {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function EncounterCard({ encounter }: { encounter: DmEncounter }) {
+  if (encounter.enemies.length === 0) return null;
+  return (
+    <div className="border-t border-[var(--border)] px-4 py-3 space-y-2 text-xs">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] uppercase tracking-wider text-red-300/80">
+          Encounter
+        </p>
+        <span className="text-[10px] text-[var(--muted)] truncate ml-2">
+          {encounter.name}
+        </span>
+      </div>
+      <ul className="space-y-1.5">
+        {encounter.enemies.map((e) => {
+          const pct = e.max_hp > 0 ? (e.hp / e.max_hp) * 100 : 0;
+          return (
+            <li
+              key={e.id}
+              className={`rounded-md border px-2.5 py-1.5 ${
+                e.is_active
+                  ? "border-[var(--border)] bg-zinc-900/40"
+                  : "border-zinc-700/50 bg-zinc-900/20 opacity-60"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span
+                  className={`text-zinc-100 truncate ${
+                    e.is_active ? "" : "line-through"
+                  }`}
+                >
+                  {e.name}
+                </span>
+                <span className="font-mono text-[10px] text-[var(--muted)] shrink-0">
+                  {e.is_active ? `${e.hp}/${e.max_hp}` : "down"}
+                </span>
+              </div>
+              {e.is_active && (
+                <div className="mt-1 h-1 rounded-full bg-zinc-900/80 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-red-500 to-red-300 transition-all duration-500"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

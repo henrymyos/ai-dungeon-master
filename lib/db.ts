@@ -51,6 +51,41 @@ export type DmLore = {
   created_at: string;
 };
 
+export type StatusKind = "debuff" | "buff" | "condition" | "injury";
+
+export type DmStatus = {
+  id: string;
+  character_id: string;
+  name: string;
+  kind: StatusKind;
+  description: string;
+  expires_at_minutes: number | null;
+  created_at: string;
+};
+
+export type DmEnemy = {
+  id: string;
+  encounter_id: string;
+  name: string;
+  description: string | null;
+  hp: number;
+  max_hp: number;
+  is_active: boolean;
+  created_at: string;
+};
+
+export type DmEncounter = {
+  id: string;
+  campaign_id: string;
+  name: string;
+  description: string | null;
+  status: "active" | "resolved";
+  outcome: string | null;
+  started_at: string;
+  ended_at: string | null;
+  enemies: DmEnemy[];
+};
+
 export type DmWorld = {
   time_minutes: number;
   day_count: number;
@@ -58,6 +93,8 @@ export type DmWorld = {
   npcs: DmNpc[];
   locations: DmLocation[];
   lore: DmLore[];
+  statuses: DmStatus[];
+  encounter: DmEncounter | null;
 };
 
 export type DmScene = {
@@ -78,6 +115,8 @@ export type DmMessageRow = {
 
 export type InventoryItem = { item: string; quantity: number };
 
+export type Skill = { name: string; level: number };
+
 export type DmCharacter = {
   id: string;
   campaign_id: string;
@@ -87,6 +126,7 @@ export type DmCharacter = {
   max_hp: number;
   attributes: { strength: number; dexterity: number; wits: number };
   inventory: InventoryItem[];
+  skills: Skill[];
   created_at: string;
   updated_at: string;
 };
@@ -102,6 +142,7 @@ export const CLASS_PRESETS: Record<
     hp: number;
     attributes: DmCharacter["attributes"];
     inventory: InventoryItem[];
+    skills: Skill[];
     blurb: string;
   }
 > = {
@@ -113,6 +154,10 @@ export const CLASS_PRESETS: Record<
       { item: "Belt knife", quantity: 1 },
       { item: "Half a candle", quantity: 1 },
     ],
+    skills: [
+      { name: "Survival", level: 2 },
+      { name: "Persuasion", level: 1 },
+    ],
     blurb: "A traveller with no allegiance to anywhere in particular.",
   },
   Fighter: {
@@ -122,6 +167,11 @@ export const CLASS_PRESETS: Record<
       { item: "Iron sword", quantity: 1 },
       { item: "Leather armor", quantity: 1 },
       { item: "Whetstone", quantity: 1 },
+    ],
+    skills: [
+      { name: "Athletics", level: 3 },
+      { name: "Intimidation", level: 2 },
+      { name: "Swordplay", level: 3 },
     ],
     blurb: "Trained to make problems bleed.",
   },
@@ -133,6 +183,11 @@ export const CLASS_PRESETS: Record<
       { item: "Lockpicks", quantity: 1 },
       { item: "Smoke pellet", quantity: 2 },
     ],
+    skills: [
+      { name: "Stealth", level: 3 },
+      { name: "Lockpicking", level: 3 },
+      { name: "Sleight of Hand", level: 2 },
+    ],
     blurb: "Quiet, fast, and missing a moral here or there.",
   },
   Mage: {
@@ -142,6 +197,11 @@ export const CLASS_PRESETS: Record<
       { item: "Oak staff", quantity: 1 },
       { item: "Spellbook (battered)", quantity: 1 },
       { item: "Vial of inkroot", quantity: 1 },
+    ],
+    skills: [
+      { name: "Arcana", level: 3 },
+      { name: "Investigation", level: 2 },
+      { name: "Spellcasting", level: 3 },
     ],
     blurb: "Reads more than she sleeps.",
   },
@@ -153,6 +213,11 @@ export const CLASS_PRESETS: Record<
       { item: "Arrow", quantity: 20 },
       { item: "Hunting knife", quantity: 1 },
       { item: "Trail rations", quantity: 3 },
+    ],
+    skills: [
+      { name: "Archery", level: 3 },
+      { name: "Tracking", level: 3 },
+      { name: "Survival", level: 2 },
     ],
     blurb: "More comfortable in the trees than indoors.",
   },

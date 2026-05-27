@@ -53,7 +53,7 @@ export async function POST(req: Request) {
   const { data: charRow } = await admin
     .from("dm_characters")
     .select(
-      "id, campaign_id, name, class, hp, max_hp, attributes, inventory, created_at, updated_at",
+      "id, campaign_id, name, class, hp, max_hp, attributes, inventory, skills, created_at, updated_at",
     )
     .eq("campaign_id", campaignId)
     .single();

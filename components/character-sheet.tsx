@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useEffect } from "react";
-import type { DmCharacter } from "@/lib/db";
+import type { DmCharacter, DmStatus, StatusKind } from "@/lib/db";
 import { CloseIcon } from "@/components/icons";
 
 const CLASSES = ["Wanderer", "Fighter", "Rogue", "Mage", "Ranger"] as const;
@@ -17,11 +17,24 @@ const BLURBS: Record<(typeof CLASSES)[number], string> = {
 
 type Props = {
   character: DmCharacter | null;
+  statuses: DmStatus[];
   onUpdate: (next: DmCharacter) => void;
   campaignId: string;
 };
 
-export function CharacterSheet({ character, onUpdate, campaignId }: Props) {
+const STATUS_TONE: Record<StatusKind, string> = {
+  buff: "border-emerald-400/40 bg-emerald-400/[0.08] text-emerald-200",
+  debuff: "border-amber-400/40 bg-amber-400/[0.08] text-amber-200",
+  condition: "border-zinc-500/40 bg-zinc-500/[0.06] text-zinc-200",
+  injury: "border-red-400/40 bg-red-400/[0.08] text-red-200",
+};
+
+export function CharacterSheet({
+  character,
+  statuses,
+  onUpdate,
+  campaignId,
+}: Props) {
   const [open, setOpen] = useState(false);
 
   if (!character) return null;
@@ -70,11 +83,44 @@ export function CharacterSheet({ character, onUpdate, campaignId }: Props) {
         </div>
       </div>
 
+      {statuses.length > 0 && (
+        <ul className="flex flex-wrap gap-1">
+          {statuses.map((s) => (
+            <li
+              key={s.id}
+              title={s.description}
+              className={`text-[10px] uppercase tracking-wider rounded border px-1.5 py-0.5 ${STATUS_TONE[s.kind]}`}
+            >
+              {s.name}
+            </li>
+          ))}
+        </ul>
+      )}
+
       <div className="grid grid-cols-3 gap-1.5 text-center">
         <Stat label="STR" value={character.attributes.strength} />
         <Stat label="DEX" value={character.attributes.dexterity} />
         <Stat label="WIT" value={character.attributes.wits} />
       </div>
+
+      {character.skills && character.skills.length > 0 && (
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-[var(--muted)] mb-1">
+            Skills
+          </p>
+          <ul className="flex flex-wrap gap-1">
+            {character.skills.map((s) => (
+              <li
+                key={s.name}
+                className="rounded-md bg-zinc-900/60 border border-[var(--border)] px-1.5 py-0.5 text-[11px] text-zinc-200"
+              >
+                {s.name}
+                <span className="text-[var(--accent)] ml-1">+{s.level}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div>
         <p className="text-[10px] uppercase tracking-wider text-[var(--muted)] mb-1">

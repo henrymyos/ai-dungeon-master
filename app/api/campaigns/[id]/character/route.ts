@@ -32,7 +32,7 @@ export async function GET(
   const { data, error } = await db()
     .from("dm_characters")
     .select(
-      "id, campaign_id, name, class, hp, max_hp, attributes, inventory, created_at, updated_at",
+      "id, campaign_id, name, class, hp, max_hp, attributes, inventory, skills, created_at, updated_at",
     )
     .eq("campaign_id", id)
     .single();
@@ -72,6 +72,7 @@ export async function PATCH(
     update.max_hp = preset.hp;
     update.attributes = preset.attributes;
     update.inventory = preset.inventory;
+    update.skills = preset.skills;
   }
 
   const { data, error } = await db()
