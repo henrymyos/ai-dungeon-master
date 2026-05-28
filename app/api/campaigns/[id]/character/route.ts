@@ -7,6 +7,7 @@ import {
   type DmCharacter,
 } from "@/lib/db";
 import { getUserId } from "@/lib/user";
+import { refreshPortraitInBackground } from "@/lib/portrait";
 
 export const runtime = "nodejs";
 
@@ -32,12 +33,19 @@ export async function GET(
   const { data, error } = await db()
     .from("dm_characters")
     .select(
-      "id, campaign_id, name, class, hp, max_hp, attributes, inventory, skills, created_at, updated_at",
+      "id, campaign_id, name, class, hp, max_hp, attributes, inventory, skills, portrait_url, portrait_hash, created_at, updated_at",
     )
     .eq("campaign_id", id)
     .single();
   if (error || !data)
     return NextResponse.json({ error: "Character missing" }, { status: 404 });
+
+  // Lazy backfill: any character that doesn't have a portrait yet (older
+  // campaigns, or a previous regen attempt that failed) gets one kicked
+  // off the moment the client polls. The poll loop in app/page.tsx will
+  // pick up the new URL on its next tick.
+  if (!data.portrait_url) refreshPortraitInBackground(id);
+
   return NextResponse.json({ character: data as DmCharacter });
 }
 
@@ -83,5 +91,10 @@ export async function PATCH(
     .single();
   if (error)
     return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Class or name changes invalidate the portrait — regenerate in the
+  // background so the response is snappy.
+  if (parsed.data.class || parsed.data.name) refreshPortraitInBackground(id);
+
   return NextResponse.json({ character: data as DmCharacter });
 }

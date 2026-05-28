@@ -2,8 +2,15 @@ import { NextResponse } from "next/server";
 import { db, OPENING_NARRATION, type DmCampaign } from "@/lib/db";
 import { generateStoryArc } from "@/lib/arc";
 import { getUserId } from "@/lib/user";
+import { refreshPortraitInBackground } from "@/lib/portrait";
+import { checkRate, rateLimitResponse } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
+
+// Campaign creation kicks off an arc generation + portrait — pricier
+// than a turn, so the cap is lower.
+const CREATE_LIMIT = 12;
+const CREATE_WINDOW_MS = 60 * 60 * 1000;
 
 export async function GET() {
   const userId = await getUserId();
@@ -21,6 +28,13 @@ export async function GET() {
 
 export async function POST() {
   const userId = await getUserId();
+  const rl = checkRate(`create:${userId}`, CREATE_LIMIT, CREATE_WINDOW_MS);
+  if (!rl.allowed) {
+    return rateLimitResponse(
+      rl,
+      "You've hit the per-hour new-adventure limit on the public demo.",
+    );
+  }
   const admin = db();
 
   const { data: campaign, error: cErr } = await admin
@@ -54,6 +68,10 @@ export async function POST() {
       .update({ story_arc: arc })
       .eq("id", campaign.id);
   }
+
+  // Kick off the initial portrait in the background so the response
+  // returns immediately; the next character refetch will pick it up.
+  refreshPortraitInBackground(campaign.id);
 
   return NextResponse.json({ campaign: { ...campaign, story_arc: arc } });
 }

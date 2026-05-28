@@ -8,6 +8,7 @@ import {
   type StatusKind,
 } from "@/lib/db";
 import { generateScene } from "@/lib/imagegen";
+import { refreshPortraitInBackground } from "@/lib/portrait";
 
 /** Result of a single tool invocation. The shape is what we send back to
  *  Claude as the tool_result content AND what we emit to the client as a
@@ -230,6 +231,7 @@ export async function executeTool(
         .from("dm_characters")
         .update({ inventory: inv, updated_at: new Date().toISOString() })
         .eq("campaign_id", campaignId);
+      refreshPortraitInBackground(campaignId);
       return { kind: "add_item", item, quantity };
     }
     case "set_scene": {
@@ -279,6 +281,7 @@ export async function executeTool(
         .from("dm_characters")
         .update({ inventory: inv, updated_at: new Date().toISOString() })
         .eq("campaign_id", campaignId);
+      refreshPortraitInBackground(campaignId);
       return { kind: "remove_item", item, quantity, remaining };
     }
     case "record_npc": {
@@ -504,6 +507,9 @@ export async function executeTool(
           expires_at_minutes,
         });
       }
+      // Injuries / buffs can colour the portrait — refresh in background.
+      if (effectKind === "injury" || effectKind === "buff")
+        refreshPortraitInBackground(campaignId);
       return {
         kind: "apply_status_effect",
         name: statusName,
@@ -530,6 +536,7 @@ export async function executeTool(
       if (existing) {
         await admin.from("dm_statuses").delete().eq("id", existing.id);
       }
+      if (existing) refreshPortraitInBackground(campaignId);
       return {
         kind: "clear_status_effect",
         name: statusName,

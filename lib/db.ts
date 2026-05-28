@@ -149,6 +149,8 @@ export type DmCharacter = {
   attributes: { strength: number; dexterity: number; wits: number };
   inventory: InventoryItem[];
   skills: Skill[];
+  portrait_url: string | null;
+  portrait_hash: string | null;
   created_at: string;
   updated_at: string;
 };

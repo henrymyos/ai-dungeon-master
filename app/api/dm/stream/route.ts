@@ -13,9 +13,15 @@ import { db, type DmCharacter, type DmMessageRow } from "@/lib/db";
 import { loadDmContext, summarizeCampaignIfNeeded } from "@/lib/summarize";
 import { loadWorld } from "@/lib/world";
 import { getUserId } from "@/lib/user";
+import { checkRate, rateLimitResponse } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+// Stop runaway bots from torching Anthropic + Together credits. Generous
+// enough that a real player won't notice.
+const STREAM_LIMIT = 40;
+const STREAM_WINDOW_MS = 60 * 60 * 1000;
 
 const Body = z.object({
   campaignId: z.string().uuid(),
@@ -24,6 +30,13 @@ const Body = z.object({
 
 export async function POST(req: Request) {
   const userId = await getUserId();
+  const rl = checkRate(`stream:${userId}`, STREAM_LIMIT, STREAM_WINDOW_MS);
+  if (!rl.allowed) {
+    return rateLimitResponse(
+      rl,
+      "You've hit the per-hour turn limit on the public demo. Try again later.",
+    );
+  }
   const raw = await req.json().catch(() => null);
   const parsed = Body.safeParse(raw);
   if (!parsed.success) {

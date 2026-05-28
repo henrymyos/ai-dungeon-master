@@ -75,7 +75,7 @@ export async function POST(
   const { data: ch } = await admin
     .from("dm_characters")
     .select(
-      "name, class, hp, max_hp, attributes, inventory, skills",
+      "name, class, hp, max_hp, attributes, inventory, skills, portrait_url, portrait_hash",
     )
     .eq("campaign_id", id)
     .single();

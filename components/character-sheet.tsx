@@ -44,42 +44,48 @@ export function CharacterSheet({
       ? Math.round((character.hp / character.max_hp) * 100)
       : 0;
   const lowHp = hpPct <= 30;
+  // Smooth hue ramp: red (0°) at 0% → amber (~45°) at 50% → green (130°) at 100%.
+  const hue = Math.max(0, Math.min(130, (hpPct / 100) * 130));
+  const barStyle = {
+    width: `${hpPct}%`,
+    background: `linear-gradient(to right, hsl(${hue} 70% 42%), hsl(${hue} 78% 56%))`,
+    boxShadow: lowHp ? `0 0 12px hsl(${hue} 80% 50% / 0.55)` : "none",
+  };
 
   return (
     <div className="border-t border-[var(--border)] px-4 py-3 space-y-2.5 text-xs">
-      <div className="flex items-center justify-between">
-        <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">
-            {character.class}
-          </p>
-          <p className="text-sm font-semibold text-zinc-100 truncate">
-            {character.name}
-          </p>
+      <div className="flex items-start gap-3">
+        <Portrait url={character.portrait_url} name={character.name} />
+        <div className="min-w-0 flex-1 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">
+              {character.class}
+            </p>
+            <p className="text-sm font-semibold text-zinc-100 truncate">
+              {character.name}
+            </p>
+          </div>
+          <button
+            onClick={() => setOpen(true)}
+            className="text-[10px] uppercase tracking-wider text-[var(--muted)] hover:text-[var(--accent)] transition-colors shrink-0"
+          >
+            Customize
+          </button>
         </div>
-        <button
-          onClick={() => setOpen(true)}
-          className="text-[10px] uppercase tracking-wider text-[var(--muted)] hover:text-[var(--accent)] transition-colors"
-        >
-          Customize
-        </button>
       </div>
 
       <div>
         <div className="flex items-center justify-between text-[10px] text-[var(--muted)] mb-1">
           <span>Health</span>
-          <span className={lowHp ? "text-red-400" : ""}>
+          <span
+            className={lowHp ? "animate-pulse" : ""}
+            style={{ color: `hsl(${hue} 70% 65%)` }}
+          >
             {character.hp} / {character.max_hp}
           </span>
         </div>
         <div className="h-1.5 rounded-full bg-zinc-900/60 overflow-hidden">
-          <div
-            className={`h-full transition-all duration-500 ${
-              lowHp
-                ? "bg-gradient-to-r from-red-500 to-red-400"
-                : "bg-gradient-to-r from-[var(--accent)] to-amber-400"
-            }`}
-            style={{ width: `${hpPct}%` }}
-          />
+          <div className="h-full transition-all duration-500" style={barStyle} />
         </div>
       </div>
 
@@ -154,6 +160,27 @@ export function CharacterSheet({
         onClose={() => setOpen(false)}
         onUpdate={onUpdate}
       />
+    </div>
+  );
+}
+
+function Portrait({ url, name }: { url: string | null; name: string }) {
+  return (
+    <div
+      className="relative w-14 h-16 shrink-0 rounded-md overflow-hidden border border-[var(--border)]
+                 bg-gradient-to-br from-[#1a1410] to-[#0c0907]"
+    >
+      {url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt={`Portrait of ${name}`}
+          className="w-full h-full object-cover"
+        />
+      ) : (
+        <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-[#2a1f15] via-[#1a1410] to-[#0c0907]" />
+      )}
+      <span className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-[var(--accent)]/15" />
     </div>
   );
 }

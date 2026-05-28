@@ -86,6 +86,27 @@ function PageInner() {
     }
   }, [activeId, fetchCharacter, fetchWorld]);
 
+  // Portrait generation runs in the background after campaign creation
+  // and after gear changes. Poll the character endpoint until a portrait
+  // shows up (or we give up after ~45s).
+  useEffect(() => {
+    if (!activeId || !character || character.portrait_url) return;
+    let cancelled = false;
+    let attempts = 0;
+    const id = setInterval(() => {
+      if (cancelled || attempts >= 15) {
+        clearInterval(id);
+        return;
+      }
+      attempts += 1;
+      fetchCharacter(activeId);
+    }, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [activeId, character, fetchCharacter]);
+
   async function newCampaign() {
     if (creating) return;
     setCreating(true);
