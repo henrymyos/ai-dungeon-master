@@ -4,7 +4,7 @@ A text-adventure dungeon master powered by Claude. Type what you do; the world r
 
 Built on Next.js 16 (App Router, Turbopack) · TypeScript · Tailwind v4 · Anthropic Claude (Haiku 4.5) · Together AI (FLUX-schnell) · Supabase (Postgres + Storage).
 
-> **Live demo:** *(add Vercel URL once deployed)*
+> **Live demo:** [ai-dungeon-master-zeta.vercel.app](https://ai-dungeon-master-zeta.vercel.app/)
 
 ## What it does
 
