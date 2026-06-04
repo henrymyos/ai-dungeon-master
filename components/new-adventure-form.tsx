@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CloseIcon } from "@/components/icons";
 import type { ClassKey } from "@/lib/db";
@@ -107,18 +107,7 @@ export function NewAdventureForm({
           <span className="text-[10px] uppercase tracking-wider text-[var(--muted)] block mb-1.5">
             Class
           </span>
-          <select
-            value={cls}
-            onChange={(e) => setCls(e.target.value as ClassKey)}
-            className="w-full bg-zinc-900/60 border border-[var(--border)] rounded-md px-3 py-2 text-sm text-zinc-100
-                       outline-none focus:border-[var(--accent)]/50"
-          >
-            {CLASSES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+          <ClassPicker value={cls} onChange={setCls} />
           <p className="mt-1.5 text-[11px] text-[var(--muted)] leading-snug">
             {BLURBS[cls]}
           </p>
@@ -243,5 +232,110 @@ export function NewAdventureForm({
       </div>
     </div>,
     document.body,
+  );
+}
+
+function ClassPicker({
+  value,
+  onChange,
+}: {
+  value: ClassKey;
+  onChange: (next: ClassKey) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className={`w-full flex items-center justify-between bg-zinc-900/60 border rounded-md px-3 py-2 text-sm text-zinc-100
+                    outline-none transition-colors ${
+                      open
+                        ? "border-[var(--accent)]/50"
+                        : "border-[var(--border)] hover:border-[var(--accent)]/40"
+                    }`}
+      >
+        <span>{value}</span>
+        <ChevronDown
+          className={`w-3.5 h-3.5 text-[var(--muted)] transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && (
+        <ul
+          role="listbox"
+          className="absolute top-full left-0 right-0 mt-1 rounded-md border border-[var(--border)]
+                     bg-[#100c08]/95 backdrop-blur-sm overflow-hidden z-20
+                     shadow-[0_20px_60px_-10px_rgba(0,0,0,0.7)]"
+        >
+          <span className="pointer-events-none block h-px w-full bg-gradient-to-r from-transparent via-[var(--accent)]/50 to-transparent" />
+          {CLASSES.map((c) => {
+            const selected = value === c;
+            return (
+              <li key={c} role="option" aria-selected={selected}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange(c);
+                    setOpen(false);
+                  }}
+                  className={`w-full text-left px-3 py-2 transition-colors ${
+                    selected
+                      ? "bg-[var(--accent)]/[0.10]"
+                      : "hover:bg-[var(--accent)]/[0.06]"
+                  }`}
+                >
+                  <span
+                    className={`block text-sm font-medium ${
+                      selected ? "text-[var(--accent)]" : "text-zinc-100"
+                    }`}
+                  >
+                    {c}
+                  </span>
+                  <span className="block text-[10px] text-[var(--muted)] leading-snug mt-0.5">
+                    {BLURBS[c]}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ChevronDown({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M6 9l6 6 6-6" />
+    </svg>
   );
 }
