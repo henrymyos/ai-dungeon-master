@@ -11,6 +11,10 @@ import { CloseIcon, TrashIcon } from "@/components/icons";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CharacterSheet } from "@/components/character-sheet";
 import { WorldPanel } from "@/components/world-panel";
+import {
+  NewAdventureForm,
+  type NewAdventurePayload,
+} from "@/components/new-adventure-form";
 import { formatCost } from "@/lib/pricing";
 
 type UsageSummary = {
@@ -34,7 +38,7 @@ type Props = {
   world: DmWorld | null;
   usage: UsageSummary | null;
   onSelect: (id: string) => void;
-  onNew: () => void;
+  onNew: (payload?: NewAdventurePayload) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onClose: () => void;
   onCharacterUpdate: (next: DmCharacter) => void;
@@ -56,6 +60,7 @@ export function Sidebar({
   onCharacterUpdate,
 }: Props) {
   const [pendingDelete, setPendingDelete] = useState<DmCampaign | null>(null);
+  const [newOpen, setNewOpen] = useState(false);
 
   async function confirmDelete() {
     if (!pendingDelete) return;
@@ -108,7 +113,7 @@ export function Sidebar({
         <div className="px-3 py-3 border-b border-[var(--border)]">
           <button
             disabled={creating}
-            onClick={onNew}
+            onClick={() => setNewOpen(true)}
             className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md
                        bg-gradient-to-b from-[var(--accent)] to-amber-600 text-zinc-950
                        hover:brightness-110 shadow-[0_4px_18px_-6px_rgba(245,158,11,0.65)]
@@ -117,6 +122,14 @@ export function Sidebar({
             {creating ? "Starting…" : "New adventure"}
           </button>
         </div>
+        <NewAdventureForm
+          open={newOpen}
+          onClose={() => setNewOpen(false)}
+          onCreate={async (payload) => {
+            await onNew(payload);
+            setNewOpen(false);
+          }}
+        />
 
         <div className="flex-1 overflow-y-auto px-2 py-2">
           <div className="px-3 mt-1 mb-1 text-[10px] uppercase tracking-wider text-[var(--muted)]">

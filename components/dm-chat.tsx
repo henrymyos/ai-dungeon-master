@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { MarkdownAnswer } from "@/components/markdown-answer";
 import {
   ChatBubbleIcon,
+  DiceIcon,
   FlameIcon,
   ImageIcon,
   MenuIcon,
@@ -21,6 +22,7 @@ import {
   speak,
 } from "@/lib/speech";
 import { ambient } from "@/lib/ambient";
+import { sfx } from "@/lib/sfx";
 
 type Props = {
   campaignId: string | null;
@@ -61,6 +63,7 @@ export function DmChat({
   const [shareOpen, setShareOpen] = useState(false);
   const [ttsOn, setTtsOn] = useState(false);
   const [ambientOn, setAmbientOn] = useState(false);
+  const [sfxOn, setSfxOn] = useState(true);
   const [displayMode, setDisplayMode] = useState<"cinematic" | "chat">(
     "cinematic",
   );
@@ -69,11 +72,18 @@ export function DmChat({
   useEffect(() => {
     setTtsOn(isTtsEnabled());
     setAmbientOn(ambient.isEnabled());
+    setSfxOn(sfx.isEnabled());
     if (typeof window !== "undefined") {
       const stored = window.localStorage.getItem("dm_display_mode");
       if (stored === "chat" || stored === "cinematic") setDisplayMode(stored);
     }
   }, []);
+
+  function toggleSfx() {
+    const next = !sfxOn;
+    setSfxOn(next);
+    sfx.setEnabled(next);
+  }
 
   function toggleDisplayMode() {
     const next = displayMode === "cinematic" ? "chat" : "cinematic";
@@ -176,8 +186,8 @@ export function DmChat({
     });
   }, [messages, busy, loading]);
 
-  async function send() {
-    const action = input.trim();
+  async function send(forcedAction?: string) {
+    const action = (forcedAction ?? input).trim();
     if (!action || busy || !campaignId) return;
 
     const userId = `u-${Date.now()}`;
@@ -187,7 +197,7 @@ export function DmChat({
       { id: userId, kind: "msg", role: "user", content: action },
       { id: dmId, kind: "msg", role: "assistant", content: "" },
     ]);
-    setInput("");
+    if (forcedAction === undefined) setInput("");
     setBusy(true);
 
     try {
@@ -363,6 +373,60 @@ export function DmChat({
     cancelSpeech();
   }
 
+  /** Strip the last user + last assistant from the local message list,
+   *  hit the server rewind endpoint, and return the deleted user action
+   *  text so callers can decide whether to replay it. */
+  async function rewindLastTurn(): Promise<string | null> {
+    if (!campaignId || busy) return null;
+    // Optimistic: peel everything since the last user message off the local
+    // list. The server is the source of truth, so we'll refresh either way.
+    let optimistic: string | null = null;
+    setMessages((m) => {
+      const out = [...m];
+      for (let i = out.length - 1; i >= 0; i--) {
+        const item = out[i];
+        if (item.kind === "msg" && item.role === "user") {
+          optimistic = item.content;
+          out.splice(i);
+          return out;
+        }
+      }
+      return out;
+    });
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/rewind`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) throw new Error("Rewind failed.");
+      const { lastUserAction } = (await res.json()) as {
+        lastUserAction: string | null;
+      };
+      return lastUserAction ?? optimistic;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Rewind failed.");
+      return null;
+    }
+  }
+
+  async function undo() {
+    await rewindLastTurn();
+    onCampaignChanged?.();
+    onStreamEnd?.();
+  }
+
+  async function retry() {
+    const action = await rewindLastTurn();
+    if (action) await send(action);
+  }
+
+  async function editAndResend(newText: string) {
+    const trimmed = newText.trim();
+    if (!trimmed) return;
+    await rewindLastTurn();
+    await send(trimmed);
+  }
+
   async function fork(messageId: string) {
     if (!campaignId) return;
     try {
@@ -383,7 +447,7 @@ export function DmChat({
 
   return (
     <section className="flex-1 flex flex-col min-w-0">
-      <header className="px-4 md:px-6 py-4 border-b border-[var(--border)] flex items-center gap-3">
+      <header className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-b border-[var(--border)] flex items-center gap-2 sm:gap-3">
         <button
           onClick={onOpenSidebar}
           className="md:hidden -ml-1 p-1.5 text-[var(--muted)] hover:text-zinc-100 rounded-md"
@@ -406,7 +470,7 @@ export function DmChat({
           )}
         </div>
         {campaignId && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             <button
               onClick={toggleDisplayMode}
               title={
@@ -435,6 +499,18 @@ export function DmChat({
             >
               <FlameIcon className="w-4 h-4" muted={!ambientOn} />
             </button>
+            <button
+              onClick={toggleSfx}
+              title={sfxOn ? "Mute sound effects" : "Play sound effects"}
+              aria-label={sfxOn ? "Mute sound effects" : "Unmute sound effects"}
+              className={`flex items-center justify-center w-8 h-8 rounded-md border transition-colors ${
+                sfxOn
+                  ? "border-[var(--accent)]/40 text-[var(--accent)] bg-[var(--accent)]/[0.06]"
+                  : "border-[var(--border)] text-[var(--muted)] hover:text-zinc-100"
+              }`}
+            >
+              <DiceIcon className="w-4 h-4" muted={!sfxOn} />
+            </button>
             {ttsAvailable && (
               <button
                 onClick={toggleTts}
@@ -451,7 +527,7 @@ export function DmChat({
             )}
             <button
               onClick={() => setShareOpen(true)}
-              className="text-xs text-[var(--muted)] hover:text-[var(--accent)] border border-[var(--border)] hover:border-[var(--accent)]/40 px-2.5 py-1.5 rounded-md transition-colors"
+              className="text-xs text-[var(--muted)] hover:text-[var(--accent)] border border-[var(--border)] hover:border-[var(--accent)]/40 px-2 sm:px-2.5 py-1.5 rounded-md transition-colors"
             >
               Share
             </button>
@@ -474,7 +550,14 @@ export function DmChat({
         ) : loading ? (
           <SkeletonChat />
         ) : displayMode === "cinematic" ? (
-          <CinematicView messages={messages} busy={busy} onFork={fork} />
+          <CinematicView
+            messages={messages}
+            busy={busy}
+            onFork={fork}
+            onRetry={retry}
+            onUndo={undo}
+            onEdit={editAndResend}
+          />
         ) : (
           <ul className="max-w-3xl mx-auto space-y-4">
             {messages.map((m) => {
@@ -528,7 +611,7 @@ export function DmChat({
       </div>
 
       {campaignId && (
-        <div className="border-t border-[var(--border)] px-4 py-3">
+        <div className="border-t border-[var(--border)] px-3 sm:px-4 pt-3 safe-bottom">
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -671,11 +754,19 @@ function CinematicView({
   messages,
   busy,
   onFork,
+  onRetry,
+  onUndo,
+  onEdit,
 }: {
   messages: Message[];
   busy: boolean;
   onFork: (msgId: string) => void;
+  onRetry: () => void;
+  onUndo: () => void;
+  onEdit: (newText: string) => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState("");
   // The "current turn" is everything since the LAST user message (inclusive).
   // If there are no user messages yet, the current turn is just the opening
   // narration.
@@ -736,13 +827,83 @@ function CinematicView({
       )}
 
       {userAction && (
-        <div className="rounded-2xl bg-gradient-to-br from-[var(--accent)]/15 to-amber-600/[0.06]
+        <div className="group relative rounded-2xl bg-gradient-to-br from-[var(--accent)]/15 to-amber-600/[0.06]
                         border border-[var(--accent)]/25 text-zinc-100 px-4 py-2.5 text-sm
                         shadow-[0_4px_22px_-12px_rgba(245,158,11,0.45)]">
           <p className="text-[10px] uppercase tracking-wider text-[var(--accent)] mb-0.5">
             You
           </p>
-          {userAction.content}
+          {editing ? (
+            <div className="space-y-2">
+              <textarea
+                autoFocus
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setEditing(false);
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    onEdit(editText);
+                    setEditing(false);
+                  }
+                }}
+                rows={2}
+                className="w-full resize-none bg-zinc-900/50 border border-[var(--border)]
+                           rounded-md px-2.5 py-1.5 text-sm text-zinc-100 outline-none
+                           focus:border-[var(--accent)]/50"
+              />
+              <div className="flex items-center justify-end gap-2 text-xs">
+                <button
+                  onClick={() => setEditing(false)}
+                  className="text-[var(--muted)] hover:text-zinc-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    onEdit(editText);
+                    setEditing(false);
+                  }}
+                  disabled={!editText.trim() || busy}
+                  className="px-2.5 py-1 rounded-md bg-[var(--accent)] text-zinc-950 font-medium
+                             hover:brightness-110 disabled:opacity-50"
+                >
+                  Save & resend
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {userAction.content}
+              {!busy && (
+                <div className="absolute top-1.5 right-1.5 flex items-center gap-1
+                                opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => {
+                      setEditText(userAction.content);
+                      setEditing(true);
+                    }}
+                    title="Edit & resend"
+                    className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded
+                               text-[var(--muted)] hover:text-[var(--accent)]
+                               border border-[var(--border)] hover:border-[var(--accent)]/40
+                               bg-[#100c08]/80 backdrop-blur-sm"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={onUndo}
+                    title="Undo this turn"
+                    className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded
+                               text-[var(--muted)] hover:text-zinc-100
+                               border border-[var(--border)] hover:border-zinc-500
+                               bg-[#100c08]/80 backdrop-blur-sm"
+                  >
+                    Undo
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 
@@ -771,17 +932,34 @@ function CinematicView({
               <MarkdownAnswer text={assistant.content} />
             </div>
           )}
-          {assistantPersistedId && (
-            <button
-              onClick={() => onFork(assistantPersistedId)}
-              title="Branch a new adventure from this moment"
-              className="absolute top-2 right-2 text-[10px] uppercase tracking-wider
-                         text-[var(--muted)] hover:text-[var(--accent)] border border-[var(--border)] hover:border-[var(--accent)]/40
-                         bg-[#100c08]/80 backdrop-blur-sm px-2 py-0.5 rounded
+          {assistantPersistedId && !busy && (
+            <div
+              className="absolute top-2 right-2 flex items-center gap-1
                          opacity-0 group-hover:opacity-100 transition-opacity"
             >
-              Branch
-            </button>
+              {userAction && (
+                <button
+                  onClick={onRetry}
+                  title="Reroll the DM's response with the same action"
+                  className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded
+                             text-[var(--muted)] hover:text-[var(--accent)]
+                             border border-[var(--border)] hover:border-[var(--accent)]/40
+                             bg-[#100c08]/80 backdrop-blur-sm"
+                >
+                  Retry
+                </button>
+              )}
+              <button
+                onClick={() => onFork(assistantPersistedId)}
+                title="Branch a new adventure from this moment"
+                className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded
+                           text-[var(--muted)] hover:text-[var(--accent)]
+                           border border-[var(--border)] hover:border-[var(--accent)]/40
+                           bg-[#100c08]/80 backdrop-blur-sm"
+              >
+                Branch
+              </button>
+            </div>
           )}
         </div>
       ) : null}

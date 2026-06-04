@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
-import { db, OPENING_NARRATION, type DmCampaign } from "@/lib/db";
+import { z } from "zod";
+import {
+  CLASS_PRESETS,
+  db,
+  OPENING_NARRATION,
+  type ClassKey,
+  type DmCampaign,
+} from "@/lib/db";
 import { generateStoryArc } from "@/lib/arc";
+import { generateOpeningNarration } from "@/lib/opening";
 import { getUserId } from "@/lib/user";
 import { refreshPortraitInBackground } from "@/lib/portrait";
 import { checkRate, rateLimitResponse } from "@/lib/ratelimit";
@@ -12,12 +20,21 @@ export const runtime = "nodejs";
 const CREATE_LIMIT = 12;
 const CREATE_WINDOW_MS = 60 * 60 * 1000;
 
+const NewCampaignBody = z.object({
+  scenario: z.string().trim().max(1000).optional(),
+  characterName: z.string().trim().min(1).max(40).optional(),
+  characterClass: z
+    .enum(["Wanderer", "Fighter", "Rogue", "Mage", "Ranger"])
+    .optional(),
+  backstory: z.string().trim().max(1000).optional(),
+});
+
 export async function GET() {
   const userId = await getUserId();
   const { data, error } = await db()
     .from("dm_campaigns")
     .select(
-      "id, user_id, title, summary, summary_through_message_id, share_token, time_minutes, day_count, weather, story_arc, current_beat, created_at, updated_at",
+      "id, user_id, title, summary, summary_through_message_id, share_token, time_minutes, day_count, weather, story_arc, current_beat, scenario, created_at, updated_at",
     )
     .eq("user_id", userId)
     .order("updated_at", { ascending: false });
@@ -26,7 +43,7 @@ export async function GET() {
   return NextResponse.json({ campaigns: (data ?? []) as DmCampaign[] });
 }
 
-export async function POST() {
+export async function POST(req: Request) {
   const userId = await getUserId();
   const rl = checkRate(`create:${userId}`, CREATE_LIMIT, CREATE_WINDOW_MS);
   if (!rl.allowed) {
@@ -37,9 +54,27 @@ export async function POST() {
   }
   const admin = db();
 
+  // Body is optional — empty/no body means the legacy fog-forest default.
+  const raw = await req.json().catch(() => null);
+  const parsed = NewCampaignBody.safeParse(raw ?? {});
+  const body = parsed.success ? parsed.data : {};
+  const scenario = body.scenario || null;
+  const cls = (body.characterClass ?? "Wanderer") as ClassKey;
+  const preset = CLASS_PRESETS[cls];
+
+  // Custom scenario → bespoke opening narration via Claude. Falls back
+  // gracefully if generation fails or no scenario is provided.
+  const opening = scenario
+    ? await generateOpeningNarration(scenario).catch(() => OPENING_NARRATION)
+    : OPENING_NARRATION;
+
   const { data: campaign, error: cErr } = await admin
     .from("dm_campaigns")
-    .insert({ user_id: userId, title: "A new adventure" })
+    .insert({
+      user_id: userId,
+      title: "A new adventure",
+      scenario,
+    })
     .select()
     .single();
   if (cErr || !campaign) {
@@ -49,17 +84,27 @@ export async function POST() {
     );
   }
 
-  // Seed opening + character, and generate the hidden story arc in
-  // parallel. Arc generation is best-effort — if it fails the campaign
-  // still runs without one.
-  const arcPromise = generateStoryArc(OPENING_NARRATION).catch(() => null);
+  // Arc + opening message + character all in parallel.
+  const arcPromise = generateStoryArc(
+    scenario ? `${scenario}\n\nOpening:\n${opening}` : opening,
+  ).catch(() => null);
   await Promise.all([
     admin.from("dm_messages").insert({
       campaign_id: campaign.id,
       role: "assistant",
-      content: OPENING_NARRATION,
+      content: opening,
     }),
-    admin.from("dm_characters").insert({ campaign_id: campaign.id }),
+    admin.from("dm_characters").insert({
+      campaign_id: campaign.id,
+      name: body.characterName ?? "Wanderer",
+      class: cls,
+      hp: preset.hp,
+      max_hp: preset.hp,
+      attributes: preset.attributes,
+      inventory: preset.inventory,
+      skills: preset.skills,
+      backstory: body.backstory ?? null,
+    }),
   ]);
   const arc = await arcPromise;
   if (arc) {
@@ -69,8 +114,6 @@ export async function POST() {
       .eq("id", campaign.id);
   }
 
-  // Kick off the initial portrait in the background so the response
-  // returns immediately; the next character refetch will pick it up.
   refreshPortraitInBackground(campaign.id);
 
   return NextResponse.json({ campaign: { ...campaign, story_arc: arc } });

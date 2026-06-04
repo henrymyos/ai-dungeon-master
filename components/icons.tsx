@@ -157,3 +157,31 @@ export function SpeakerIcon({
     </svg>
   );
 }
+
+export function DiceIcon({
+  className = "",
+  muted = false,
+}: {
+  className?: string;
+  muted?: boolean;
+}) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="4" y="4" width="16" height="16" rx="3" />
+      <circle cx="9" cy="9" r="1" fill="currentColor" />
+      <circle cx="15" cy="9" r="1" fill="currentColor" />
+      <circle cx="15" cy="15" r="1" fill="currentColor" />
+      <circle cx="9" cy="15" r="1" fill="currentColor" />
+      <circle cx="12" cy="12" r="1" fill="currentColor" />
+      {muted && <path d="M5 5l14 14" strokeWidth="2" />}
+    </svg>
+  );
+}

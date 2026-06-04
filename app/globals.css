@@ -24,6 +24,23 @@ html, body {
   overflow-x: hidden;
 }
 
+/* iOS Safari needs explicit safe-area handling on the bottom input bar
+   so the home-indicator doesn't overlap the textarea, plus a stable
+   viewport height to survive keyboard-open. */
+.safe-bottom {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+/* Touch devices can't hover, so message-action controls need to be
+   visible by default rather than gated on hover. We can't use a Tailwind
+   media-query for hover capability cleanly, so do it in CSS. */
+@media (hover: none) {
+  .opacity-0.group-hover\:opacity-100,
+  .opacity-0.group-hover\:opacity-100[class*="transition"] {
+    opacity: 1 !important;
+  }
+}
+
 /* Torchlight glow drifting in the corners — same idea as paper-summarizer
    but warm, like firelight against a stone wall. */
 body {

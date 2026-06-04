@@ -33,7 +33,7 @@ export async function GET(
   const { data, error } = await db()
     .from("dm_characters")
     .select(
-      "id, campaign_id, name, class, hp, max_hp, attributes, inventory, skills, portrait_url, portrait_hash, created_at, updated_at",
+      "id, campaign_id, name, class, hp, max_hp, attributes, inventory, skills, portrait_url, portrait_hash, backstory, created_at, updated_at",
     )
     .eq("campaign_id", id)
     .single();
@@ -52,6 +52,7 @@ export async function GET(
 const Patch = z.object({
   name: z.string().min(1).max(40).optional(),
   class: z.enum(["Wanderer", "Fighter", "Rogue", "Mage", "Ranger"]).optional(),
+  backstory: z.string().max(1000).optional(),
 });
 
 export async function PATCH(
@@ -81,6 +82,9 @@ export async function PATCH(
     update.attributes = preset.attributes;
     update.inventory = preset.inventory;
     update.skills = preset.skills;
+  }
+  if (parsed.data.backstory !== undefined) {
+    update.backstory = parsed.data.backstory.trim() || null;
   }
 
   const { data, error } = await db()

@@ -16,6 +16,7 @@ export type DmCampaign = {
   weather: string;
   story_arc: StoryArc | null;
   current_beat: number;
+  scenario: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -151,6 +152,7 @@ export type DmCharacter = {
   skills: Skill[];
   portrait_url: string | null;
   portrait_hash: string | null;
+  backstory: string | null;
   created_at: string;
   updated_at: string;
 };

@@ -51,7 +51,7 @@ export async function POST(req: Request) {
   // Ownership check.
   const { data: campaign, error: ownErr } = await admin
     .from("dm_campaigns")
-    .select("id, title")
+    .select("id, title, scenario")
     .eq("id", campaignId)
     .eq("user_id", userId)
     .single();
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
   const { data: charRow } = await admin
     .from("dm_characters")
     .select(
-      "id, campaign_id, name, class, hp, max_hp, attributes, inventory, skills, created_at, updated_at",
+      "id, campaign_id, name, class, hp, max_hp, attributes, inventory, skills, backstory, portrait_url, portrait_hash, created_at, updated_at",
     )
     .eq("campaign_id", campaignId)
     .single();
@@ -152,7 +152,11 @@ export async function POST(req: Request) {
         // Split: cache the static instructions block (stable), then
         // append the dynamic state without a cache_control so it doesn't
         // poison the cache when HP / NPCs / time change between turns.
-        const dynamic = buildDynamicStateBlock(character, world);
+        const dynamic = buildDynamicStateBlock(
+          character,
+          world,
+          (campaign as { scenario?: string | null }).scenario ?? null,
+        );
         const system: Anthropic.TextBlockParam[] = [
           {
             type: "text",

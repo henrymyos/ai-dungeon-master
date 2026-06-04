@@ -5,9 +5,9 @@ import { worldStateForPrompt } from "@/lib/world";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
-const BASE_SYSTEM_PROMPT = `You are the Dungeon Master of an evocative dark-fantasy world. The player has just begun their adventure in a fog-shrouded forest at dusk, where ancient trees lean close together and the air smells of moss and woodsmoke from somewhere unseen.
+const BASE_SYSTEM_PROMPT = `You are the Dungeon Master of an evocative world. The world's specific setting is established by the opening narration the player has already received and any scenario notes provided in the dynamic state block — read those, then never contradict them.
 
-Respond to the player's stated actions in vivid second-person prose. Keep responses to 2–4 sentences — enough to set a scene or describe a consequence, never enough to railroad the player. Always end with a beat that invites the next action: a sound from beyond the trees, a glint of something half-buried in the leaves, a door slowly opening.
+Respond to the player's stated actions in vivid second-person prose. Keep responses to 2–4 sentences — enough to set a scene or describe a consequence, never enough to railroad the player. Always end with a beat that invites the next action: a sound from beyond, a glint of something half-buried, a door slowly opening.
 
 Stay grounded in the player's choices. Never narrate their inner thoughts or feelings — only the world's response. Don't editorialize. Don't break the fourth wall. If the player attempts something impossible, let the world push back diegetically.`;
 
@@ -60,8 +60,18 @@ export function buildStaticSystemPrompt(): string {
 export function buildDynamicStateBlock(
   character: DmCharacter | null,
   world: DmWorld | null,
+  scenario: string | null = null,
 ): string {
   const parts: string[] = [];
+
+  if (scenario && scenario.trim()) {
+    parts.push(
+      [
+        "## Scenario (the world the player chose — anchor every scene to this)",
+        scenario.trim(),
+      ].join("\n"),
+    );
+  }
 
   if (character) {
     const inv =
@@ -73,17 +83,21 @@ export function buildDynamicStateBlock(
       character.skills && character.skills.length > 0
         ? character.skills.map((s) => `${s.name} ${s.level}`).join(", ")
         : "none yet";
-    parts.push(
-      [
-        "## Player character (live state — keep narration consistent with this)",
-        `Name: ${character.name}`,
-        `Class: ${character.class}`,
-        `HP: ${character.hp} / ${character.max_hp}`,
-        `Attributes: STR ${attrs.strength} · DEX ${attrs.dexterity} · WITS ${attrs.wits}`,
-        `Trained skills (pass skill_name to roll_dice when relevant): ${skills}`,
-        `Carrying: ${inv}`,
-      ].join("\n"),
-    );
+    const charLines = [
+      "## Player character (live state — keep narration consistent with this)",
+      `Name: ${character.name}`,
+      `Class: ${character.class}`,
+      `HP: ${character.hp} / ${character.max_hp}`,
+      `Attributes: STR ${attrs.strength} · DEX ${attrs.dexterity} · WITS ${attrs.wits}`,
+      `Trained skills (pass skill_name to roll_dice when relevant): ${skills}`,
+      `Carrying: ${inv}`,
+    ];
+    if (character.backstory && character.backstory.trim()) {
+      charLines.push(
+        `Backstory (woven by the player — refer to it organically, never quote it back verbatim): ${character.backstory.trim()}`,
+      );
+    }
+    parts.push(charLines.join("\n"));
   }
 
   if (world) {
