@@ -14,6 +14,8 @@ import { loadDmContext, summarizeCampaignIfNeeded } from "@/lib/summarize";
 import { loadWorld } from "@/lib/world";
 import { getUserId } from "@/lib/user";
 import { checkRate, rateLimitResponse } from "@/lib/ratelimit";
+import { sceneFromNarration } from "@/lib/scene-from-narration";
+import { generateScene } from "@/lib/imagegen";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -228,6 +230,51 @@ export async function POST(req: Request) {
 
           messages.push({ role: "assistant", content: resp.content });
           messages.push({ role: "user", content: toolResultContent });
+        }
+
+        // Fallback: if the DM didn't explicitly call set_scene this turn,
+        // synthesize one from the narration so the player always gets a
+        // fresh illustration. Uses the most recent scene on this campaign
+        // as continuity context so dialogue-only turns don't randomly
+        // teleport the camera.
+        if (!lastScene && accumulatedText.trim().length > 0) {
+          try {
+            const { data: prior } = await admin
+              .from("dm_messages")
+              .select("scene")
+              .eq("campaign_id", campaignId)
+              .not("scene", "is", null)
+              .order("id", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            const priorScene =
+              (prior?.scene as {
+                location?: string;
+                mood?: string;
+              } | null) ?? null;
+            const spec = await sceneFromNarration(accumulatedText, {
+              lastLocation: priorScene?.location ?? null,
+              lastMood: priorScene?.mood ?? null,
+            });
+            if (spec) {
+              const image_url = await generateScene(
+                spec.image_prompt,
+                campaignId,
+              );
+              const synth: SceneEvent = {
+                kind: "set_scene",
+                location: spec.location,
+                mood: spec.mood,
+                image_prompt: spec.image_prompt,
+                image_url,
+              };
+              lastScene = synth;
+              send({ type: "tool", event: synth });
+            }
+          } catch (e) {
+            // Non-fatal — narration still lands, just without a fresh image.
+            console.warn("auto-scene fallback failed", e);
+          }
         }
 
         if (accumulatedText.length > 0) {
