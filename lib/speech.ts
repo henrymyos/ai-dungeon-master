@@ -3,20 +3,32 @@
 /**
  * Thin wrapper around the browser's free SpeechSynthesis API.
  *
- * Voices populate asynchronously in some browsers (Chrome especially) —
- * the first getVoices() call right after page load often returns []. We
- * cache the voice list and refresh it on the `voiceschanged` event.
+ * Chrome quirks worth knowing:
+ *   - Voices populate asynchronously; first getVoices() often returns [].
+ *     We re-read on the `voiceschanged` event.
+ *   - The engine silently pauses after ~15s of utterance; call .resume()
+ *     defensively before each speak.
+ *   - speechSynthesis.speak() needs to ride a user gesture for the very
+ *     first utterance after page load on autoplay-restricted setups.
+ *     primeSpeech() queues a silent utterance synchronously inside the
+ *     submit handler to satisfy that requirement.
  */
 
 const STORAGE_KEY = "dm_tts_enabled";
+const DEBUG =
+  typeof window !== "undefined" &&
+  window.localStorage?.getItem("dm_tts_debug") === "1";
+
+function log(...args: unknown[]) {
+  if (DEBUG) console.log("[tts]", ...args);
+}
 
 let _voices: SpeechSynthesisVoice[] = [];
 
 if (typeof window !== "undefined" && "speechSynthesis" in window) {
-  // Prime the voice list. Both reads — the initial one and the event —
-  // are necessary because browsers behave differently.
   const refresh = () => {
     _voices = window.speechSynthesis.getVoices();
+    log("voices refreshed:", _voices.length);
   };
   refresh();
   window.speechSynthesis.addEventListener("voiceschanged", refresh);
@@ -37,7 +49,6 @@ export function setTtsEnabled(on: boolean) {
 }
 
 function pickVoice(): SpeechSynthesisVoice | null {
-  // Use the cached list if populated; fall back to a fresh read.
   let voices = _voices;
   if (voices.length === 0 && isTtsAvailable()) {
     voices = window.speechSynthesis.getVoices();
@@ -64,6 +75,25 @@ export function cancelSpeech() {
   window.speechSynthesis.cancel();
 }
 
+/**
+ * Queue a near-silent utterance synchronously from a user-gesture
+ * handler (e.g. the submit button click) so Chrome treats the
+ * subsequent end-of-stream speak() as still "user-initiated."
+ */
+export function primeSpeech() {
+  if (!isTtsAvailable() || !isTtsEnabled()) return;
+  try {
+    const u = new SpeechSynthesisUtterance(" ");
+    u.volume = 0; // silent — just unlocks the engine
+    u.rate = 10;
+    window.speechSynthesis.resume();
+    window.speechSynthesis.speak(u);
+    log("primed");
+  } catch (err) {
+    log("prime failed", err);
+  }
+}
+
 function stripMarkdown(text: string): string {
   return text
     .replace(/\*\*(.+?)\*\*/g, "$1")
@@ -76,35 +106,52 @@ function stripMarkdown(text: string): string {
 }
 
 function enqueue(text: string) {
+  const synth = window.speechSynthesis;
+  // Chrome silently pauses the engine after ~15s of speech. resume() is
+  // a no-op when running, so call it unconditionally.
+  synth.resume();
   const voice = pickVoice();
+  log("enqueue", { chars: text.length, voice: voice?.name ?? "(default)" });
   const chunks = text.match(/[^.!?]+[.!?]+/g) ?? [text];
   for (const chunk of chunks) {
     const u = new SpeechSynthesisUtterance(chunk);
     if (voice) u.voice = voice;
     u.rate = 0.95;
     u.pitch = 0.95;
-    window.speechSynthesis.speak(u);
+    u.onerror = (e) => log("utterance error", e.error ?? e);
+    u.onstart = () => log("utterance start");
+    u.onend = () => log("utterance end");
+    synth.speak(u);
   }
 }
 
 export function speak(text: string) {
-  if (!isTtsAvailable() || !isTtsEnabled()) return;
+  if (!isTtsAvailable()) {
+    log("speak skipped: no synth");
+    return;
+  }
+  if (!isTtsEnabled()) {
+    log("speak skipped: tts disabled");
+    return;
+  }
   const clean = stripMarkdown(text);
-  if (!clean) return;
+  if (!clean) {
+    log("speak skipped: empty after strip");
+    return;
+  }
 
+  log("speak", { chars: clean.length, voicesCached: _voices.length });
   window.speechSynthesis.cancel();
 
   // If voices haven't loaded yet, wait one tick on `voiceschanged`.
   if (_voices.length === 0) {
+    log("waiting for voices…");
     const handler = () => {
       window.speechSynthesis.removeEventListener("voiceschanged", handler);
       _voices = window.speechSynthesis.getVoices();
       enqueue(clean);
     };
     window.speechSynthesis.addEventListener("voiceschanged", handler);
-    // Belt-and-braces: also enqueue after a small delay in case the event
-    // never fires (some browsers populate voices synchronously after a
-    // microtask).
     setTimeout(() => {
       window.speechSynthesis.removeEventListener("voiceschanged", handler);
       enqueue(clean);
@@ -113,4 +160,22 @@ export function speak(text: string) {
   }
 
   enqueue(clean);
+}
+
+/** Expose internal state for debugging from the browser console. */
+if (typeof window !== "undefined") {
+  (
+    window as Window & { __dmTts?: unknown }
+  ).__dmTts = {
+    voices: () => _voices,
+    enabled: isTtsEnabled,
+    speak,
+    primeSpeech,
+    enableDebug: () => {
+      window.localStorage.setItem("dm_tts_debug", "1");
+      console.log(
+        "[tts] debug mode on — reload to take effect on the module log line",
+      );
+    },
+  };
 }

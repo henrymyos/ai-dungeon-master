@@ -18,6 +18,7 @@ import {
   cancelSpeech,
   isTtsAvailable,
   isTtsEnabled,
+  primeSpeech,
   setTtsEnabled,
   speak,
 } from "@/lib/speech";
@@ -189,6 +190,13 @@ export function DmChat({
   async function send(forcedAction?: string) {
     const action = (forcedAction ?? input).trim();
     if (!action || busy || !campaignId) return;
+
+    // Chrome restricts speechSynthesis to a recent user gesture. Send is
+    // triggered by either a click or Enter — both qualify — so queue a
+    // silent utterance synchronously here. Without this, the speak()
+    // that fires several seconds later (after streaming completes) can
+    // be silently dropped on Chrome.
+    primeSpeech();
 
     const userId = `u-${Date.now()}`;
     const dmId = `a-${Date.now()}`;
