@@ -117,15 +117,27 @@ function stripMarkdown(text: string): string {
 
 function enqueue(text: string) {
   const synth = window.speechSynthesis;
-  // Chrome silently pauses the engine after ~15s of speech. resume() is
-  // a no-op when running, so call it unconditionally.
   synth.resume();
   const voice = pickVoice();
-  log("enqueue", { chars: text.length, voice: voice?.name ?? "(default)" });
+  log("enqueue", {
+    chars: text.length,
+    voice: voice?.name ?? "(default)",
+    lang: voice?.lang ?? "(none)",
+    speakingBefore: synth.speaking,
+    pendingBefore: synth.pending,
+    paused: synth.paused,
+  });
   const chunks = text.match(/[^.!?]+[.!?]+/g) ?? [text];
   for (const chunk of chunks) {
     const u = new SpeechSynthesisUtterance(chunk);
-    if (voice) u.voice = voice;
+    if (voice) {
+      u.voice = voice;
+      // Setting lang explicitly avoids a Chrome quirk where the
+      // utterance is silently dropped if voice.lang doesn't match.
+      u.lang = voice.lang || "en-US";
+    } else {
+      u.lang = "en-US";
+    }
     u.rate = 0.95;
     u.pitch = 0.95;
     u.onerror = (e) => log("utterance error", e.error ?? e);
@@ -133,6 +145,11 @@ function enqueue(text: string) {
     u.onend = () => log("utterance end");
     synth.speak(u);
   }
+  log("after enqueue", {
+    speaking: synth.speaking,
+    pending: synth.pending,
+    paused: synth.paused,
+  });
 }
 
 export function speak(text: string) {
@@ -150,20 +167,40 @@ export function speak(text: string) {
     return;
   }
 
-  log("speak", { chars: clean.length, voicesCached: _voices.length });
-  window.speechSynthesis.cancel();
+  const synth = window.speechSynthesis;
+  log("speak", {
+    chars: clean.length,
+    voicesCached: _voices.length,
+    speaking: synth.speaking,
+    pending: synth.pending,
+    paused: synth.paused,
+  });
 
-  // If voices haven't loaded yet, wait one tick on `voiceschanged`.
+  // Only cancel if there's actually something to cancel. Calling
+  // cancel() unconditionally puts Chrome's engine into a state where
+  // subsequent speak() calls are silently dropped — and it also wipes
+  // out the silent primer that primeSpeech() queued from the user
+  // gesture, defeating the autoplay-policy workaround.
+  const needsClear = synth.speaking || synth.pending;
+  if (needsClear) {
+    synth.cancel();
+    log("cancel issued — deferring speak by 80ms to dodge Chrome bug");
+    // Chrome bug: cancel() + immediate speak() leaves the engine deaf.
+    // A short tick lets cancel actually finish before we queue more.
+    setTimeout(() => enqueue(clean), 80);
+    return;
+  }
+
   if (_voices.length === 0) {
     log("waiting for voices…");
     const handler = () => {
-      window.speechSynthesis.removeEventListener("voiceschanged", handler);
-      _voices = window.speechSynthesis.getVoices();
+      synth.removeEventListener("voiceschanged", handler);
+      _voices = synth.getVoices();
       enqueue(clean);
     };
-    window.speechSynthesis.addEventListener("voiceschanged", handler);
+    synth.addEventListener("voiceschanged", handler);
     setTimeout(() => {
-      window.speechSynthesis.removeEventListener("voiceschanged", handler);
+      synth.removeEventListener("voiceschanged", handler);
       enqueue(clean);
     }, 250);
     return;
