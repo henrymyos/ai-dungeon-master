@@ -227,6 +227,12 @@ export function DmChat({
       // without reaching back into React state.
       let currentDmId = dmId;
       let finalText = "";
+      // Snapshot of the previous segment's narration captured right
+      // before a tool event resets finalText. Lets us still speak the
+      // narration when the only "new" event after the last token is a
+      // post-stream auto-generated set_scene (which leaves finalText
+      // empty).
+      let priorSegmentText = "";
       const flush = () => {
         if (!pending) {
           scheduled = false;
@@ -316,6 +322,7 @@ export function DmChat({
               return out;
             });
             currentDmId = nextDmId;
+            if (finalText.trim().length > 0) priorSegmentText = finalText;
             finalText = "";
             if (toolEvt.kind === "set_scene" && ambient.isEnabled()) {
               ambient.setMood(toolEvt.mood);
@@ -342,8 +349,13 @@ export function DmChat({
       // Speak the final accumulated text from this turn. Read state via
       // localStorage rather than the captured `ttsOn` closure so toggling
       // the speaker on/off during streaming takes effect.
-      if (isTtsEnabled() && finalText.trim().length > 0) {
-        speak(finalText);
+      // Prefer the live segment; fall back to the segment captured before
+      // a trailing tool event (e.g. the auto-generated set_scene that
+      // fires after the narration finishes).
+      const speakText =
+        finalText.trim().length > 0 ? finalText : priorSegmentText;
+      if (isTtsEnabled() && speakText.trim().length > 0) {
+        speak(speakText);
       }
 
       onCampaignChanged?.();
