@@ -55,19 +55,29 @@ function pickVoice(): SpeechSynthesisVoice | null {
     _voices = voices;
   }
   if (voices.length === 0) return null;
+
+  // Chrome's "Google …" voices stream from Google's servers and fail
+  // silently on a depressingly long list of network/policy conditions
+  // (CSP, cookie blockers, offline, etc). Prefer a local voice every
+  // time even if it sounds less polished. Apple/Microsoft built-ins
+  // (Daniel, Ryan, Aaron, Arthur, Samantha) all qualify.
+  const local = voices.filter((v) => v.localService);
+  const pool = local.length > 0 ? local : voices;
+
   const prefs = [
-    /Google UK English Male/i,
     /Daniel/i,
-    /Microsoft Ryan|Liam|Arthur/i,
-    /en-GB/i,
-    /en-AU/i,
-    /en-US/i,
+    /Microsoft (Ryan|Guy|Liam|Arthur|Aaron)/i,
+    /Aaron|Arthur|Fred|Reed/i,
+    /^en-GB/i,
+    /^en-AU/i,
+    /^en-US/i,
+    /^en/i,
   ];
   for (const re of prefs) {
-    const m = voices.find((v) => re.test(v.name) || re.test(v.lang));
+    const m = pool.find((v) => re.test(v.name) || re.test(v.lang));
     if (m) return m;
   }
-  return voices[0];
+  return pool[0];
 }
 
 export function cancelSpeech() {
