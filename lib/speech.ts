@@ -86,22 +86,15 @@ export function cancelSpeech() {
 }
 
 /**
- * Queue a near-silent utterance synchronously from a user-gesture
- * handler (e.g. the submit button click) so Chrome treats the
- * subsequent end-of-stream speak() as still "user-initiated."
+ * No-op kept for source compatibility. Previously queued a silent
+ * utterance to satisfy Chrome's autoplay policy, but on macOS Chrome
+ * a volume-0 utterance gets stuck in a phantom "speaking" state forever
+ * — which then poisons the real speak() call a few seconds later. The
+ * speaker-toggle click is itself a user gesture and is enough to unlock
+ * the engine for the session.
  */
 export function primeSpeech() {
-  if (!isTtsAvailable() || !isTtsEnabled()) return;
-  try {
-    const u = new SpeechSynthesisUtterance(" ");
-    u.volume = 0; // silent — just unlocks the engine
-    u.rate = 10;
-    window.speechSynthesis.resume();
-    window.speechSynthesis.speak(u);
-    log("primed");
-  } catch (err) {
-    log("prime failed", err);
-  }
+  // intentionally empty
 }
 
 function stripMarkdown(text: string): string {
@@ -176,18 +169,14 @@ export function speak(text: string) {
     paused: synth.paused,
   });
 
-  // Only cancel if there's actually something to cancel. Calling
-  // cancel() unconditionally puts Chrome's engine into a state where
-  // subsequent speak() calls are silently dropped — and it also wipes
-  // out the silent primer that primeSpeech() queued from the user
-  // gesture, defeating the autoplay-policy workaround.
-  const needsClear = synth.speaking || synth.pending;
-  if (needsClear) {
+  // Chrome's speechSynthesis has a known bug where synth.speaking sticks
+  // at true even after the actual utterance has finished or never
+  // played, especially after volume-0 priming or cancel-then-speak. If
+  // we see that stuck state, hard-reset the engine before queueing.
+  if (synth.speaking || synth.pending || synth.paused) {
     synth.cancel();
-    log("cancel issued — deferring speak by 80ms to dodge Chrome bug");
-    // Chrome bug: cancel() + immediate speak() leaves the engine deaf.
-    // A short tick lets cancel actually finish before we queue more.
-    setTimeout(() => enqueue(clean), 80);
+    log("reset stuck engine — deferring speak 100ms");
+    setTimeout(() => enqueue(clean), 100);
     return;
   }
 
@@ -218,6 +207,29 @@ if (typeof window !== "undefined") {
     enabled: isTtsEnabled,
     speak,
     primeSpeech,
+    state: () => ({
+      speaking: window.speechSynthesis.speaking,
+      pending: window.speechSynthesis.pending,
+      paused: window.speechSynthesis.paused,
+    }),
+    /** Bypass everything. Direct browser-native test — if this is
+     *  silent too, the problem is OS/Chrome, not our code. */
+    rawTest: () => {
+      const u = new SpeechSynthesisUtterance(
+        "If you can hear this, your browser TTS works.",
+      );
+      u.lang = "en-US";
+      u.onstart = () => console.log("[tts:rawTest] started");
+      u.onend = () => console.log("[tts:rawTest] ended");
+      u.onerror = (e) => console.log("[tts:rawTest] error", e.error ?? e);
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+      console.log(
+        "[tts:rawTest] queued; state =",
+        window.speechSynthesis.speaking,
+        window.speechSynthesis.pending,
+      );
+    },
     enableDebug: () => {
       window.localStorage.setItem("dm_tts_debug", "1");
       console.log(
