@@ -56,24 +56,31 @@ function pickVoice(): SpeechSynthesisVoice | null {
   }
   if (voices.length === 0) return null;
 
-  // Chrome's "Google …" voices stream from Google's servers and fail
-  // silently on a depressingly long list of network/policy conditions
-  // (CSP, cookie blockers, offline, etc). Prefer a local voice every
-  // time even if it sounds less polished. Apple/Microsoft built-ins
-  // (Daniel, Ryan, Aaron, Arthur, Samantha) all qualify.
+  // Filter to local voices — Google's cloud-streamed voices fail
+  // silently on too many network/policy conditions.
   const local = voices.filter((v) => v.localService);
   const pool = local.length > 0 ? local : voices;
 
-  const prefs = [
-    /Daniel/i,
-    /Microsoft (Ryan|Guy|Liam|Arthur|Aaron)/i,
-    /Aaron|Arthur|Fred|Reed/i,
+  // Tiered preference list. The "Enhanced" / "Premium" / "(Neural)"
+  // tags are higher-quality voice models — Apple ships them as
+  // optional downloads under System Settings → Accessibility →
+  // Spoken Content → Manage Voices. If the user has any of those
+  // installed, they sound dramatically more human than the
+  // compact-tier defaults.
+  const tiers: RegExp[] = [
+    // Best quality: explicitly enhanced / premium / neural variants.
+    /\b(Premium|Enhanced|Neural)\b/i,
+    // Narrator-suited voices, lower-pitched / measured.
+    /Daniel|Arthur|Reed|Oliver|Tom|Albert|Bahh|Bruce|Fred/i,
+    // Microsoft Edge premium neural voices (if present).
+    /Microsoft (Ryan|Guy|Liam|Arthur|Aaron|Davis|Tony)/i,
+    // English locale fallbacks.
     /^en-GB/i,
     /^en-AU/i,
     /^en-US/i,
     /^en/i,
   ];
-  for (const re of prefs) {
+  for (const re of tiers) {
     const m = pool.find((v) => re.test(v.name) || re.test(v.lang));
     if (m) return m;
   }
@@ -120,24 +127,26 @@ function enqueue(text: string) {
     pendingBefore: synth.pending,
     paused: synth.paused,
   });
-  const chunks = text.match(/[^.!?]+[.!?]+/g) ?? [text];
-  for (const chunk of chunks) {
-    const u = new SpeechSynthesisUtterance(chunk);
-    if (voice) {
-      u.voice = voice;
-      // Setting lang explicitly avoids a Chrome quirk where the
-      // utterance is silently dropped if voice.lang doesn't match.
-      u.lang = voice.lang || "en-US";
-    } else {
-      u.lang = "en-US";
-    }
-    u.rate = 0.95;
-    u.pitch = 0.95;
-    u.onerror = (e) => log("utterance error", e.error ?? e);
-    u.onstart = () => log("utterance start");
-    u.onend = () => log("utterance end");
-    synth.speak(u);
+
+  // Speak the whole narration as a single utterance. The previous
+  // sentence-by-sentence splitting was the main source of the "jumpy"
+  // sound — the synth pauses noticeably between utterances. One
+  // utterance = continuous prosody, natural sentence rhythm.
+  const u = new SpeechSynthesisUtterance(text);
+  if (voice) {
+    u.voice = voice;
+    u.lang = voice.lang || "en-US";
+  } else {
+    u.lang = "en-US";
   }
+  // Slower + slightly lower than default for a narrator cadence.
+  u.rate = 0.88;
+  u.pitch = 0.9;
+  u.onerror = (e) => log("utterance error", e.error ?? e);
+  u.onstart = () => log("utterance start");
+  u.onend = () => log("utterance end");
+  synth.speak(u);
+
   log("after enqueue", {
     speaking: synth.speaking,
     pending: synth.pending,
