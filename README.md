@@ -102,7 +102,7 @@ TOGETHER_API_KEY=              # api.together.xyz/settings/api-keys (optional �
 
 Tables are `dm_campaigns`, `dm_messages`, `dm_characters`, `dm_npcs`, `dm_locations`, `dm_lore`, `dm_statuses`, `dm_encounters`, `dm_enemies`, `dm_quests`. Storage buckets are `scenes` and `portraits`, both public.
 
-Schema is managed via Supabase migrations applied through the MCP tool during development. The migration files aren't versioned in this repo yet — running this against a fresh Supabase project would require recreating the schema by hand.
+The full schema lives in [`supabase/schema.sql`](supabase/schema.sql). To set up a fresh Supabase project, run that file once in the SQL Editor — it creates all tables, indexes, RLS (deny-by-default; the app uses the service-role key), and both storage buckets. Then update the three Supabase env vars (locally in `.env.local`, and on Vercel via `scripts/sync-supabase-env.sh`) and redeploy.
 
 ## Deploy
 
@@ -118,7 +118,6 @@ The app is designed for Vercel:
 ## Limitations
 
 - **No auth.** Identity is a visitor cookie. Clearing cookies or switching browsers means starting over.
-- **Schema isn't versioned** as migration files in this repo — it lives in Supabase. Fresh deployments need it recreated.
 - **In-memory rate limit doesn't survive cold starts.** Real production protection would need Supabase- or Redis-backed counters.
 - **No character continuity across portraits.** FLUX is stateless, so a class change generates a brand-new face rather than the same face wearing different gear.
 
