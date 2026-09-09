@@ -303,13 +303,7 @@ function EncounterCard({ encounter }: { encounter: DmEncounter }) {
 
 function UsageFooter({ usage }: { usage: UsageSummary | null }) {
   const [open, setOpen] = useState(false);
-  if (!usage || usage.turns === 0) {
-    return (
-      <div className="px-5 py-3 text-[11px] text-[var(--muted)] border-t border-[var(--border)]">
-        Phase 5 · summarization + tool use
-      </div>
-    );
-  }
+  if (!usage || usage.turns === 0) return null;
   const t = usage.tokens;
   const cacheRate =
     t.input_tokens + t.cache_read_tokens === 0
