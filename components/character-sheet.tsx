@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import { useIsClient } from "@/lib/use-is-client";
 import { useEffect } from "react";
 import type { DmCharacter, DmStatus, StatusKind } from "@/lib/db";
 import { CloseIcon } from "@/components/icons";
@@ -214,15 +215,17 @@ function ClassPickerModal({
   const [name, setName] = useState(current.name);
   const [cls, setCls] = useState(current.class);
   const [saving, setSaving] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useIsClient();
 
-  useEffect(() => setMounted(true), []);
-  useEffect(() => {
+  // Reset the form when the modal opens or the character changes (adjusting state during render, per React docs).
+  const [prev, setPrev] = useState({ open, current });
+  if (prev.open !== open || prev.current !== current) {
+    setPrev({ open, current });
     if (open) {
       setName(current.name);
       setCls(current.class);
     }
-  }, [open, current]);
+  }
 
   useEffect(() => {
     if (!open) return;

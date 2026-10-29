@@ -24,6 +24,7 @@ import {
 } from "@/lib/speech";
 import { ambient } from "@/lib/ambient";
 import { sfx } from "@/lib/sfx";
+import { useIsClient } from "@/lib/use-is-client";
 
 type Props = {
   campaignId: string | null;
@@ -70,15 +71,19 @@ export function DmChat({
   );
   const ttsAvailable = isTtsAvailable();
 
-  useEffect(() => {
+  // Browser-only prefs (localStorage, speech API) are read on the first client
+  // render after hydration, so the SSR markup still matches; state is adjusted
+  // during render (per the React docs) instead of in a mount effect.
+  const isClient = useIsClient();
+  const [prefsRead, setPrefsRead] = useState(false);
+  if (isClient && !prefsRead) {
+    setPrefsRead(true);
     setTtsOn(isTtsEnabled());
     setAmbientOn(ambient.isEnabled());
     setSfxOn(sfx.isEnabled());
-    if (typeof window !== "undefined") {
-      const stored = window.localStorage.getItem("dm_display_mode");
-      if (stored === "chat" || stored === "cinematic") setDisplayMode(stored);
-    }
-  }, []);
+    const stored = window.localStorage.getItem("dm_display_mode");
+    if (stored === "chat" || stored === "cinematic") setDisplayMode(stored);
+  }
 
   function toggleSfx() {
     const next = !sfxOn;
@@ -124,13 +129,17 @@ export function DmChat({
   const abortRef = useRef<AbortController | null>(null);
   const toast = useToast();
 
+  // Clear history when there's no campaign (adjusting state during render, per React docs).
+  const [prevCampaignId, setPrevCampaignId] = useState(campaignId);
+  if (campaignId !== prevCampaignId) {
+    setPrevCampaignId(campaignId);
+    if (!campaignId) setMessages([]);
+  }
+
   // Load this campaign's history whenever the active id changes.
   useEffect(() => {
     let cancelled = false;
-    if (!campaignId) {
-      setMessages([]);
-      return;
-    }
+    if (!campaignId) return;
     (async () => {
       setLoading(true);
       try {
@@ -1056,7 +1065,12 @@ function ShareModal({
   const [copied, setCopied] = useState(false);
   const toast = useToast();
 
-  useEffect(() => setToken(shareToken), [shareToken]);
+  // Follow the prop when the parent's token changes (adjusting state during render, per React docs).
+  const [prevShareToken, setPrevShareToken] = useState(shareToken);
+  if (shareToken !== prevShareToken) {
+    setPrevShareToken(shareToken);
+    setToken(shareToken);
+  }
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useIsClient } from "@/lib/use-is-client";
 import { CloseIcon } from "@/components/icons";
 import type { ClassKey } from "@/lib/db";
 
@@ -55,9 +56,8 @@ export function NewAdventureForm({
   const [scenario, setScenario] = useState("");
   const [backstory, setBackstory] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useIsClient();
 
-  useEffect(() => setMounted(true), []);
   useEffect(() => {
     if (!inline && !open) return;
     function onKey(e: KeyboardEvent) {

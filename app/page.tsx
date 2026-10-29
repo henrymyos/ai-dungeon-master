@@ -23,6 +23,23 @@ type UsageSummary = {
   estimatedCostUsd: number;
 };
 
+// null when the request fails, same as before; callers own the setState.
+async function loadCharacter(campaignId: string): Promise<DmCharacter | null> {
+  const res = await fetch(`/api/campaigns/${campaignId}/character`, {
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  return ((await res.json()) as { character: DmCharacter }).character;
+}
+
+async function loadWorld(campaignId: string): Promise<DmWorld | null> {
+  const res = await fetch(`/api/campaigns/${campaignId}/world`, {
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  return ((await res.json()) as { world: DmWorld }).world;
+}
+
 function PageInner() {
   const [campaigns, setCampaigns] = useState<DmCampaign[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -42,29 +59,15 @@ function PageInner() {
     return campaigns;
   }, []);
 
-  const fetchCharacter = useCallback(async (campaignId: string) => {
-    const res = await fetch(`/api/campaigns/${campaignId}/character`, {
-      cache: "no-store",
-    });
-    if (!res.ok) {
-      setCharacter(null);
-      return;
-    }
-    const { character } = (await res.json()) as { character: DmCharacter };
-    setCharacter(character);
-  }, []);
+  const fetchCharacter = useCallback(
+    async (campaignId: string) => setCharacter(await loadCharacter(campaignId)),
+    [],
+  );
 
-  const fetchWorld = useCallback(async (campaignId: string) => {
-    const res = await fetch(`/api/campaigns/${campaignId}/world`, {
-      cache: "no-store",
-    });
-    if (!res.ok) {
-      setWorld(null);
-      return;
-    }
-    const { world } = (await res.json()) as { world: DmWorld };
-    setWorld(world);
-  }, []);
+  const fetchWorld = useCallback(
+    async (campaignId: string) => setWorld(await loadWorld(campaignId)),
+    [],
+  );
 
   const refreshUsage = useCallback(async () => {
     const res = await fetch("/api/usage", { cache: "no-store" });
@@ -81,15 +84,21 @@ function PageInner() {
     })();
   }, [refresh, refreshUsage]);
 
-  useEffect(() => {
-    if (activeId) {
-      fetchCharacter(activeId);
-      fetchWorld(activeId);
-    } else {
+  // Clear the sheet when no campaign is active (adjusting state during render, per React docs).
+  const [prevActiveId, setPrevActiveId] = useState(activeId);
+  if (activeId !== prevActiveId) {
+    setPrevActiveId(activeId);
+    if (!activeId) {
       setCharacter(null);
       setWorld(null);
     }
-  }, [activeId, fetchCharacter, fetchWorld]);
+  }
+
+  useEffect(() => {
+    if (!activeId) return;
+    loadCharacter(activeId).then(setCharacter);
+    loadWorld(activeId).then(setWorld);
+  }, [activeId]);
 
   // Portrait generation runs in the background after campaign creation
   // and after gear changes. Poll the character endpoint until a portrait

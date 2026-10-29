@@ -4,11 +4,11 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useRef,
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { useIsClient } from "@/lib/use-is-client";
 import { CloseIcon } from "@/components/icons";
 
 type Severity = "info" | "success" | "error";
@@ -37,9 +37,7 @@ export function useToast(): Ctx {
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const idRef = useRef(0);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => setMounted(true), []);
+  const mounted = useIsClient();
 
   const push = useCallback((severity: Severity, message: string) => {
     const id = ++idRef.current;
