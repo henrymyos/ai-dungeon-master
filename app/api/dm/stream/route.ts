@@ -9,7 +9,7 @@ import {
 } from "@/lib/dm";
 import { executeTool, type ToolEvent } from "@/lib/tools";
 type SceneEvent = Extract<ToolEvent, { kind: "set_scene" }>;
-import { db, type DmCharacter, type DmMessageRow } from "@/lib/db";
+import { db, type DmCharacter } from "@/lib/db";
 import { loadDmContext, summarizeCampaignIfNeeded } from "@/lib/summarize";
 import { loadWorld } from "@/lib/world";
 import { getUserId } from "@/lib/user";

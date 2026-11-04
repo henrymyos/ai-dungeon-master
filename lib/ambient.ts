@@ -121,7 +121,6 @@ class AmbientEngine {
       }
     }
 
-    const target = cfg.level;
     return {
       mood,
       gain,

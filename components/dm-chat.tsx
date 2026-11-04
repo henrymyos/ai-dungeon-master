@@ -235,7 +235,6 @@ export function DmChat({
       const decoder = new TextDecoder();
       let buffer = "";
       let streamErr: string | null = null;
-      let titleChanged = false;
 
       let pending = "";
       let scheduled = false;
@@ -345,8 +344,6 @@ export function DmChat({
               ambient.setMood(toolEvt.mood);
             }
             onToolEvent?.(toolEvt);
-          } else if (parsed.type === "title") {
-            titleChanged = true;
           } else if (parsed.type === "error") {
             streamErr = parsed.message ?? "DM call failed.";
           }
