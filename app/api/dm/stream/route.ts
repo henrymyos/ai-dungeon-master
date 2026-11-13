@@ -177,6 +177,10 @@ export async function POST(req: Request) {
           const resp = await client.messages.create({
             model: DM_MODEL,
             max_tokens: 700,
+            // Tools + static prompt (~3.5K tokens) sit under Haiku 4.5's 4096-token
+            // cache minimum, so the system marker alone never caches. The automatic
+            // marker caches the whole prefix, so tool-loop rounds re-read it at 0.1x.
+            cache_control: { type: "ephemeral" },
             system,
             tools: DM_TOOLS,
             messages,
