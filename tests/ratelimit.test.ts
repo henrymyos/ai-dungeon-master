@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkRate, rateLimitResponse } from "../lib/ratelimit";
+import { bucketCount, checkRate, rateLimitResponse } from "../lib/ratelimit";
 
 test("checkRate allows up to the limit, then blocks until the window slides", (t) => {
   t.mock.timers.enable({ apis: ["Date"], now: 1_000_000 });
@@ -33,4 +33,15 @@ test("rateLimitResponse is a 429 with Retry-After of at least 1s", async (t) => 
   assert.deepEqual(await res.json(), { error: "slow down", retryAfterSec: 3 });
   const past = rateLimitResponse({ allowed: false, remaining: 0, resetAt: -5 }, "x");
   assert.equal(past.headers.get("Retry-After"), "1");
+});
+
+test("checkRate forgets visitors whose window has passed", (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 9_000_000 });
+  for (let i = 0; i < 5000; i++) {
+    t.mock.timers.tick(1000);
+    checkRate(`test:visitor${i}`, 30, 60_000);
+  }
+  assert.ok(bucketCount() < 2100, `kept ${bucketCount()} buckets`);
+  // A still-active visitor keeps its history through a prune.
+  assert.equal(checkRate("test:visitor4999", 1, 60_000).allowed, false);
 });
