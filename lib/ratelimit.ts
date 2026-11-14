@@ -11,7 +11,17 @@ import "server-only";
  * if you need real durability.
  */
 
-const buckets = new Map<string, number[]>();
+const buckets = new Map<string, { hits: number[]; windowMs: number }>();
+// Drop keys whose last hit has left its window, so one-off visitors don't pile up
+// on a warm instance. Amortized: the next sweep waits until the map doubles.
+let pruneAt = 1000;
+
+function prune(now: number) {
+  for (const [k, b] of buckets) if (b.hits[b.hits.length - 1] <= now - b.windowMs) buckets.delete(k);
+  pruneAt = Math.max(1000, buckets.size * 2);
+}
+
+export const bucketCount = () => buckets.size;
 
 export type RateResult = {
   allowed: boolean;
@@ -26,12 +36,13 @@ export function checkRate(
 ): RateResult {
   const now = Date.now();
   const cutoff = now - windowMs;
-  const arr = (buckets.get(key) ?? []).filter((t) => t > cutoff);
+  const arr = (buckets.get(key)?.hits ?? []).filter((t) => t > cutoff);
   if (arr.length >= limit) {
     return { allowed: false, remaining: 0, resetAt: arr[0] + windowMs };
   }
   arr.push(now);
-  buckets.set(key, arr);
+  if (buckets.size >= pruneAt) prune(now);
+  buckets.set(key, { hits: arr, windowMs });
   return { allowed: true, remaining: limit - arr.length, resetAt: now + windowMs };
 }
 
