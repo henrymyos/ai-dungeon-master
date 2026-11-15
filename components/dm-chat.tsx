@@ -472,7 +472,7 @@ export function DmChat({
   }
 
   return (
-    <section className="flex-1 flex flex-col min-w-0">
+    <main className="flex-1 flex flex-col min-w-0">
       <header className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-b border-[var(--border)] flex items-center gap-2 sm:gap-3">
         <button
           onClick={onOpenSidebar}
@@ -694,7 +694,7 @@ export function DmChat({
           </p>
         </div>
       )}
-    </section>
+    </main>
   );
 }
 
