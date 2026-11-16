@@ -6,9 +6,12 @@
  *
  *   npx tsx scripts/backfill-scenes.ts
  */
-import { config as loadEnv } from "dotenv";
-loadEnv({ path: ".env.local" });
-loadEnv();
+// Node's built-in loader; earlier files and the real env win, missing files are skipped.
+for (const f of [".env.local", ".env"]) {
+  try {
+    process.loadEnvFile(f);
+  } catch {}
+}
 
 import { createClient } from "@supabase/supabase-js";
 
