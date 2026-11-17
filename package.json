@@ -10,7 +10,7 @@
     "test": "tsx --conditions=react-server --test tests/*.test.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^1.9.0",
+    "@anthropic-ai/sdk": "^1.10.0",
     "@supabase/supabase-js": "^2.119.0",
     "next": "16.4.6",
     "react": "19.3.1",
