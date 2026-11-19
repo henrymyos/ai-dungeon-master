@@ -112,3 +112,14 @@ body {
   color: var(--accent);
   animation: caret-blink 0.9s steps(1) infinite;
 }
+
+/* Honour the OS "reduce motion" setting for every animation; loading spinners keep turning. */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.animate-spin),
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
