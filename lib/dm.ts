@@ -119,10 +119,6 @@ export function buildSystemPrompt(
     : buildStaticSystemPrompt();
 }
 
-export type DmMessage =
-  | { role: "user"; content: string }
-  | { role: "assistant"; content: string };
-
 // ─── Tools ─────────────────────────────────────────────────────────────────
 export const DM_TOOLS: Anthropic.Tool[] = [
   {
