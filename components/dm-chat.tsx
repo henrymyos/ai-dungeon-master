@@ -647,7 +647,7 @@ export function DmChat({
                        focus-within:border-[var(--accent)]/50 focus-within:shadow-[0_0_0_3px_rgba(245,158,11,0.12)]
                        transition-all px-3 py-2"
           >
-            <textarea
+            <textarea aria-label="What do you do?"
               rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -861,7 +861,7 @@ function CinematicView({
           </p>
           {editing ? (
             <div className="space-y-2">
-              <textarea
+              <textarea aria-label="Edit your action"
                 autoFocus
                 value={editText}
                 onChange={(e) => setEditText(e.target.value)}
@@ -1154,7 +1154,7 @@ function ShareModal({
           {url ? (
             <>
               <div className="flex items-stretch gap-2">
-                <input
+                <input aria-label="Share link"
                   readOnly
                   value={url}
                   onFocus={(e) => e.currentTarget.select()}
