@@ -59,7 +59,7 @@ export function CharacterSheet({
         <Portrait url={character.portrait_url} name={character.name} />
         <div className="min-w-0 flex-1 flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">
+            <p className="text-xs uppercase tracking-wider text-[var(--muted)]">
               {character.class}
             </p>
             <p className="text-sm font-semibold text-zinc-100 truncate">
@@ -68,7 +68,7 @@ export function CharacterSheet({
           </div>
           <button
             onClick={() => setOpen(true)}
-            className="text-[10px] uppercase tracking-wider text-[var(--muted)] hover:text-[var(--accent)] transition-colors shrink-0"
+            className="min-h-(--tap) -my-3 px-2 -mr-2 text-xs uppercase tracking-wider text-[var(--muted)] hover:text-[var(--accent)] transition-colors shrink-0"
           >
             Customize
           </button>
@@ -76,7 +76,7 @@ export function CharacterSheet({
       </div>
 
       <div>
-        <div className="flex items-center justify-between text-[10px] text-[var(--muted)] mb-1">
+        <div className="flex items-center justify-between text-xs text-[var(--muted)] mb-1">
           <span>Health</span>
           <span
             className={lowHp ? "animate-pulse" : ""}
@@ -96,7 +96,7 @@ export function CharacterSheet({
             <li
               key={s.id}
               title={s.description}
-              className={`text-[10px] uppercase tracking-wider rounded border px-1.5 py-0.5 ${STATUS_TONE[s.kind]}`}
+              className={`text-xs uppercase tracking-wider rounded border px-1.5 py-0.5 ${STATUS_TONE[s.kind]}`}
             >
               {s.name}
             </li>
@@ -112,14 +112,14 @@ export function CharacterSheet({
 
       {character.skills && character.skills.length > 0 && (
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-[var(--muted)] mb-1">
+          <p className="text-xs uppercase tracking-wider text-[var(--muted)] mb-1">
             Skills
           </p>
           <ul className="flex flex-wrap gap-1">
             {character.skills.map((s) => (
               <li
                 key={s.name}
-                className="rounded-md bg-zinc-900/60 border border-[var(--border)] px-1.5 py-0.5 text-[11px] text-zinc-200"
+                className="rounded-md bg-zinc-900/60 border border-[var(--border)] px-1.5 py-0.5 text-xs text-zinc-200"
               >
                 {s.name}
                 <span className="text-[var(--accent)] ml-1">+{s.level}</span>
@@ -130,7 +130,7 @@ export function CharacterSheet({
       )}
 
       <div>
-        <p className="text-[10px] uppercase tracking-wider text-[var(--muted)] mb-1">
+        <p className="text-xs uppercase tracking-wider text-[var(--muted)] mb-1">
           Inventory
         </p>
         {character.inventory.length === 0 ? (
@@ -140,7 +140,7 @@ export function CharacterSheet({
             {character.inventory.map((i) => (
               <li
                 key={i.item}
-                className="rounded-md bg-zinc-900/60 border border-[var(--border)] px-1.5 py-0.5 text-[11px] text-zinc-200"
+                className="rounded-md bg-zinc-900/60 border border-[var(--border)] px-1.5 py-0.5 text-xs text-zinc-200"
               >
                 {i.item}
                 {i.quantity > 1 && (
@@ -189,7 +189,7 @@ function Portrait({ url, name }: { url: string | null; name: string }) {
 function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-md bg-zinc-900/40 border border-[var(--border)] py-1">
-      <p className="text-[9px] uppercase tracking-wider text-[var(--muted)]">
+      <p className="text-xs uppercase tracking-wider text-[var(--muted)]">
         {label}
       </p>
       <p className="text-sm font-mono text-zinc-100 leading-none mt-0.5">
@@ -284,7 +284,7 @@ function ClassPickerModal({
         </header>
         <div className="px-5 py-4 space-y-4">
           <label className="block text-xs">
-            <span className="text-[10px] uppercase tracking-wider text-[var(--muted)] block mb-1.5">
+            <span className="text-xs uppercase tracking-wider text-[var(--muted)] block mb-1.5">
               Name
             </span>
             <input
@@ -296,7 +296,7 @@ function ClassPickerModal({
             />
           </label>
           <fieldset>
-            <span className="text-[10px] uppercase tracking-wider text-[var(--muted)] block mb-2">
+            <span className="text-xs uppercase tracking-wider text-[var(--muted)] block mb-2">
               Class
             </span>
             <div className="grid grid-cols-1 gap-1.5">
@@ -319,7 +319,7 @@ function ClassPickerModal({
                   />
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-zinc-100">{c}</p>
-                    <p className="text-[11px] text-[var(--muted)]">
+                    <p className="text-xs text-[var(--muted)]">
                       {BLURBS[c]}
                     </p>
                   </div>
@@ -327,7 +327,7 @@ function ClassPickerModal({
               ))}
             </div>
           </fieldset>
-          <p className="text-[11px] text-[var(--muted)] leading-relaxed">
+          <p className="text-xs text-[var(--muted)] leading-relaxed">
             Changing your class resets your HP and inventory to that class&apos;s
             starting kit — your story so far is preserved.
           </p>

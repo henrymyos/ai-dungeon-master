@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { DmChat } from "@/components/dm-chat";
 import { Sidebar } from "@/components/sidebar";
 import { ToastProvider, useToast } from "@/components/toast";
@@ -40,6 +40,26 @@ async function loadWorld(campaignId: string): Promise<DmWorld | null> {
   return ((await res.json()) as { world: DmWorld }).world;
 }
 
+// Remembers that this browser already has adventures, so a returning player sees the
+// loading layout while /api/campaigns answers and a new visitor sees the form at once.
+const RETURNING_KEY = "aidm:has-campaigns";
+const noSubscribe = () => () => {};
+function readReturning(): boolean {
+  try {
+    return localStorage.getItem(RETURNING_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function writeReturning(has: boolean) {
+  try {
+    if (has) localStorage.setItem(RETURNING_KEY, "1");
+    else localStorage.removeItem(RETURNING_KEY);
+  } catch {
+    // Storage blocked: new-visitor behaviour, which is the safe default.
+  }
+}
+
 function PageInner() {
   const [campaigns, setCampaigns] = useState<DmCampaign[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -50,6 +70,8 @@ function PageInner() {
   const [world, setWorld] = useState<DmWorld | null>(null);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const toast = useToast();
+  // false during SSR and hydration, so the server HTML (the landing form) always matches.
+  const returning = useSyncExternalStore(noSubscribe, readReturning, () => false);
 
   const refresh = useCallback(async () => {
     const res = await fetch("/api/campaigns", { cache: "no-store" });
@@ -75,14 +97,21 @@ function PageInner() {
     setUsage((await res.json()) as UsageSummary);
   }, []);
 
+  // The landing form is usable before the first list arrives; creating waits
+  // for it so the initial (empty) list can't overwrite the new adventure.
+  const initialLoad = useRef<Promise<void> | null>(null);
   useEffect(() => {
-    (async () => {
+    initialLoad.current = (async () => {
       const list = await refresh();
       if (list && list.length > 0) setActiveId(list[0].id);
       await refreshUsage();
       setLoading(false);
     })();
   }, [refresh, refreshUsage]);
+
+  useEffect(() => {
+    if (!loading) writeReturning(campaigns.length > 0);
+  }, [loading, campaigns.length]);
 
   // Clear the sheet when no campaign is active (adjusting state during render, per React docs).
   const [prevActiveId, setPrevActiveId] = useState(activeId);
@@ -125,6 +154,7 @@ function PageInner() {
     if (creating) return;
     setCreating(true);
     try {
+      await initialLoad.current;
       const res = await fetch("/api/campaigns", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -332,9 +362,10 @@ function PageInner() {
 
   const active = campaigns.find((c) => c.id === activeId) ?? null;
 
-  // First-time visitor: full-screen landing. Once they have any campaign,
-  // we drop back into the normal sidebar + chat layout.
-  if (!loading && campaigns.length === 0) {
+  // First-time visitor: full-screen landing, shown while the list is still
+  // loading too (a cold /api/campaigns takes ~3 s). Once they have any
+  // campaign, we drop back into the normal sidebar + chat layout.
+  if (campaigns.length === 0 && (!loading || !returning)) {
     return <LandingPage onCreate={newCampaign} creating={creating} />;
   }
 
@@ -394,21 +425,22 @@ function LandingPage({
   creating: boolean;
 }) {
   return (
-    <main className="min-h-dvh flex flex-col items-center justify-center px-4 py-10 sm:py-16 relative overflow-hidden">
+    <main className="min-h-dvh flex flex-col items-center justify-center px-4 py-6 sm:py-10 relative overflow-hidden">
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[var(--accent)]/[0.06] to-transparent" />
       <div className="pointer-events-none absolute -top-32 left-1/2 -translate-x-1/2 w-[520px] h-[520px] bg-[var(--accent)]/[0.08] rounded-full blur-3xl" />
-      <div className="relative z-10 text-center mb-8 sm:mb-10 max-w-2xl">
+      <div className="relative z-10 text-center mb-5 sm:mb-8 max-w-2xl">
         <div
-          className="mx-auto relative w-14 h-14 rounded-2xl bg-[var(--accent)]/15 border border-[var(--accent)]/30
-                     flex items-center justify-center mb-5
+          aria-hidden="true"
+          className="mx-auto relative w-11 h-11 sm:w-14 sm:h-14 rounded-(--r-md) sm:rounded-2xl bg-[var(--accent)]/15 border border-[var(--accent)]/30
+                     flex items-center justify-center mb-3 sm:mb-5
                      shadow-[0_0_45px_-5px_rgba(245,158,11,0.6)] text-[var(--accent)] text-2xl"
         >
           ✦
         </div>
-        <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
+        <h1 className="text-[length:var(--fs-32)] sm:text-[length:var(--fs-44)] leading-(--lh-head) font-semibold tracking-tight">
           AI Dungeon Master
         </h1>
-        <p className="mt-3 text-sm sm:text-base text-[var(--muted)] leading-relaxed">
+        <p className="mt-2 sm:mt-3 text-sm sm:text-base text-[var(--muted)] leading-normal sm:leading-relaxed">
           A text adventure where Claude is the dungeon master. Describe what you
           do; the world streams back vivid second-person prose, illustrated
           scenes, and a living world that remembers your choices.
@@ -423,7 +455,7 @@ function LandingPage({
           subtitle="Pick your hero. Add a world and a backstory if you want — leave them blank and the DM picks."
         />
       </div>
-      <p className="relative z-10 mt-6 text-[11px] text-[var(--muted)]">
+      <p className="relative z-10 mt-6 text-xs text-[var(--muted)]">
         No login. Your progress is tied to this browser.
       </p>
     </main>

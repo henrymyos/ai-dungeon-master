@@ -37,14 +37,14 @@ export default async function SharePage({
     <main className="min-h-dvh">
       <header className="px-6 py-5 border-b border-[var(--border)] flex items-center justify-between">
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">
+          <p className="text-xs uppercase tracking-wider text-[var(--muted)]">
             Shared adventure
           </p>
           <h1 className="text-base font-semibold tracking-tight">
             {campaign.title}
           </h1>
           {character?.name && (
-            <p className="text-[11px] text-[var(--muted)] mt-0.5">
+            <p className="text-xs text-[var(--muted)] mt-0.5">
               with {character.name} the {character.class}
             </p>
           )}
@@ -60,7 +60,7 @@ export default async function SharePage({
       <div className="max-w-3xl mx-auto px-4 md:px-6 py-8 space-y-6">
         {campaign.summary && (
           <section className="rounded-2xl border border-[var(--border)] bg-[#1a1410]/30 px-5 py-4">
-            <p className="text-[10px] uppercase tracking-wider text-[var(--muted)] mb-1.5">
+            <p className="text-xs uppercase tracking-wider text-[var(--muted)] mb-1.5">
               Previously
             </p>
             <p className="text-sm text-zinc-300 leading-relaxed italic">

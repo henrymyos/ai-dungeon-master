@@ -476,7 +476,7 @@ export function DmChat({
       <header className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-b border-[var(--border)] flex items-center gap-2 sm:gap-3">
         <button
           onClick={onOpenSidebar}
-          className="md:hidden -ml-1 p-1.5 text-[var(--muted)] hover:text-zinc-100 rounded-md"
+          className="md:hidden -ml-2 w-(--tap) h-(--tap) shrink-0 flex items-center justify-center text-[var(--muted)] hover:text-zinc-100 rounded-(--r-md)"
           aria-label="Open sidebar"
         >
           <MenuIcon className="w-5 h-5" />
@@ -488,10 +488,15 @@ export function DmChat({
           {campaignId && world ? (
             <WorldChip world={world} />
           ) : (
-            <p className="text-[11px] text-[var(--muted)]">
-              {campaignId
-                ? "A foggy forest at dusk"
-                : "Pick an adventure on the left, or start a new one"}
+            <p className="text-xs text-[var(--muted)]">
+              {campaignId ? (
+                "A foggy forest at dusk"
+              ) : (
+                <>
+                  <span className="md:hidden">Open ☰ to pick an adventure, or start a new one</span>
+                  <span className="hidden md:inline">Pick an adventure on the left, or start a new one</span>
+                </>
+              )}
             </p>
           )}
         </div>
@@ -645,7 +650,7 @@ export function DmChat({
             }}
             className="max-w-3xl mx-auto flex items-end gap-2 bg-[#1a1410]/50 border border-[var(--border)] rounded-2xl
                        focus-within:border-[var(--accent)]/50 focus-within:shadow-[0_0_0_3px_rgba(245,158,11,0.12)]
-                       transition-all px-3 py-2"
+                       transition-all px-3 py-1"
           >
             <textarea aria-label="What do you do?"
               rows={1}
@@ -659,14 +664,14 @@ export function DmChat({
               }}
               placeholder="What do you do?"
               disabled={busy}
-              className="flex-1 resize-none bg-transparent outline-none text-sm py-1.5
+              className="flex-1 resize-none bg-transparent outline-none text-base py-2.5
                          placeholder:text-zinc-500 disabled:opacity-50"
             />
             {busy ? (
               <button
                 type="button"
                 onClick={stop}
-                className="shrink-0 flex items-center justify-center w-9 h-9 rounded-xl
+                className="shrink-0 flex items-center justify-center w-(--tap) h-(--tap) rounded-(--r-md)
                            bg-zinc-800 text-zinc-100 border border-zinc-700
                            hover:bg-zinc-700 transition-all"
                 aria-label="Stop"
@@ -678,7 +683,7 @@ export function DmChat({
               <button
                 type="submit"
                 disabled={!input.trim()}
-                className="shrink-0 flex items-center justify-center w-9 h-9 rounded-xl
+                className="shrink-0 flex items-center justify-center w-(--tap) h-(--tap) rounded-(--r-md)
                            bg-[var(--accent)] text-zinc-950
                            disabled:bg-[#2a1f15] disabled:text-zinc-600
                            hover:brightness-110 transition-all"
@@ -688,7 +693,7 @@ export function DmChat({
               </button>
             )}
           </form>
-          <p className="max-w-3xl mx-auto mt-2 text-[11px] text-[var(--muted)] text-center">
+          <p className="max-w-3xl mx-auto mt-2 text-xs text-[var(--muted)] text-center">
             Type any action — &ldquo;I open the lantern&rdquo;, &ldquo;I creep
             forward&rdquo;, &ldquo;I call out&rdquo;.
           </p>
@@ -710,7 +715,8 @@ function EmptyState() {
       </div>
       <h3 className="text-lg font-medium">A campfire awaits a story.</h3>
       <p className="mt-1.5 text-sm text-[var(--muted)] max-w-md">
-        Start a new adventure from the sidebar, or revisit one you&apos;ve
+        Start a new adventure from the <span className="md:hidden">☰ menu</span>
+        <span className="hidden md:inline">sidebar</span>, or revisit one you&apos;ve
         already begun. Every action you take is saved, so you can close the
         tab and return whenever the night feels right.
       </p>
@@ -753,7 +759,7 @@ function WorldChip({ world }: { world: DmWorld }) {
     : 0;
   const beatNum = Math.min(world.current_beat + 1, Math.max(totalBeats, 1));
   return (
-    <div className="mt-0.5 text-[11px] text-[var(--muted)] flex items-center gap-1.5 flex-wrap">
+    <div className="mt-0.5 text-xs text-[var(--muted)] flex items-center gap-1.5 flex-wrap">
       <span className="text-[var(--accent)]">Day {world.day_count}</span>
       <span aria-hidden>·</span>
       <span className="font-mono tabular-nums">{formatTime(world.time_minutes)}</span>
@@ -766,7 +772,7 @@ function WorldChip({ world }: { world: DmWorld }) {
           <span aria-hidden>·</span>
           <span
             title="Hidden story arc progress"
-            className="font-mono uppercase tracking-wider text-[10px]"
+            className="font-mono uppercase tracking-wider text-xs"
           >
             beat {beatNum}/{totalBeats}
           </span>
@@ -856,7 +862,7 @@ function CinematicView({
         <div className="group relative rounded-2xl bg-gradient-to-br from-[var(--accent)]/15 to-amber-600/[0.06]
                         border border-[var(--accent)]/25 text-zinc-100 px-4 py-2.5 text-sm
                         shadow-[0_4px_22px_-12px_rgba(245,158,11,0.45)]">
-          <p className="text-[10px] uppercase tracking-wider text-[var(--accent)] mb-0.5">
+          <p className="text-xs uppercase tracking-wider text-[var(--accent)] mb-0.5">
             You
           </p>
           {editing ? (
@@ -909,7 +915,7 @@ function CinematicView({
                       setEditing(true);
                     }}
                     title="Edit & resend"
-                    className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded
+                    className="text-xs uppercase tracking-wider px-1.5 py-0.5 rounded
                                text-[var(--muted)] hover:text-[var(--accent)]
                                border border-[var(--border)] hover:border-[var(--accent)]/40
                                bg-[#100c08]/80 backdrop-blur-sm"
@@ -919,7 +925,7 @@ function CinematicView({
                   <button
                     onClick={onUndo}
                     title="Undo this turn"
-                    className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded
+                    className="text-xs uppercase tracking-wider px-1.5 py-0.5 rounded
                                text-[var(--muted)] hover:text-zinc-100
                                border border-[var(--border)] hover:border-zinc-500
                                bg-[#100c08]/80 backdrop-blur-sm"
@@ -967,7 +973,7 @@ function CinematicView({
                 <button
                   onClick={onRetry}
                   title="Reroll the DM's response with the same action"
-                  className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded
+                  className="text-xs uppercase tracking-wider px-1.5 py-0.5 rounded
                              text-[var(--muted)] hover:text-[var(--accent)]
                              border border-[var(--border)] hover:border-[var(--accent)]/40
                              bg-[#100c08]/80 backdrop-blur-sm"
@@ -978,7 +984,7 @@ function CinematicView({
               <button
                 onClick={() => onFork(assistantPersistedId)}
                 title="Branch a new adventure from this moment"
-                className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded
+                className="text-xs uppercase tracking-wider px-1.5 py-0.5 rounded
                            text-[var(--muted)] hover:text-[var(--accent)]
                            border border-[var(--border)] hover:border-[var(--accent)]/40
                            bg-[#100c08]/80 backdrop-blur-sm"
@@ -1034,7 +1040,7 @@ function SceneCard({ scene }: { scene: DmScene }) {
           }`}
         />
       </div>
-      <figcaption className="flex items-center justify-between px-4 py-2 border-t border-[var(--border)] bg-black/30 text-[11px]">
+      <figcaption className="flex items-center justify-between px-4 py-2 border-t border-[var(--border)] bg-black/30 text-xs">
         <span className="text-zinc-200 truncate">{scene.location}</span>
         <span className="font-mono uppercase tracking-wider text-[var(--accent)]">
           {scene.mood}
@@ -1170,7 +1176,7 @@ function ShareModal({
               <button
                 disabled={busy}
                 onClick={revoke}
-                className="text-[11px] text-red-400/80 hover:text-red-300 transition-colors"
+                className="text-xs text-red-400/80 hover:text-red-300 transition-colors"
               >
                 Revoke link
               </button>
@@ -1292,7 +1298,7 @@ function ToolEffectCard({ event }: { event: ToolEvent }) {
       </span>
       <span className="text-zinc-200">{title}</span>
       {detail && (
-        <span className="font-mono text-[11px] text-[var(--accent)]">
+        <span className="font-mono text-xs text-[var(--accent)]">
           {detail}
         </span>
       )}
@@ -1340,7 +1346,7 @@ function NarrationCard({
         <button
           onClick={onFork}
           title="Branch a new adventure from this moment"
-          className="absolute top-2 right-2 text-[10px] uppercase tracking-wider
+          className="absolute top-2 right-2 text-xs uppercase tracking-wider
                      text-[var(--muted)] hover:text-[var(--accent)] border border-[var(--border)] hover:border-[var(--accent)]/40
                      bg-[#100c08]/80 backdrop-blur-sm px-2 py-0.5 rounded
                      opacity-0 group-hover:opacity-100 transition-opacity"

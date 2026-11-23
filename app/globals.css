@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Shared design tokens v1 (type, spacing, radii, --tap). The :root below keeps this app's amber palette. */
+@import "./tokens.css";
 
 :root {
   --background: #0a0907;

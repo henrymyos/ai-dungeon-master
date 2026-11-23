@@ -29,7 +29,7 @@ export function WorldPanel({ world }: { world: DmWorld | null }) {
   if (!hasAny) return null;
   return (
     <div className="border-t border-[var(--border)] px-4 py-3 space-y-2 text-xs">
-      <p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">
+      <p className="text-xs uppercase tracking-wider text-[var(--muted)]">
         World
       </p>
       {world.quests.length > 0 && (
@@ -46,11 +46,11 @@ export function WorldPanel({ world }: { world: DmWorld | null }) {
                   >
                     {q.name}
                   </span>
-                  <span className="text-[10px] uppercase tracking-wider text-[var(--muted)] shrink-0">
+                  <span className="text-xs uppercase tracking-wider text-[var(--muted)] shrink-0">
                     {q.status}
                   </span>
                 </div>
-                <p className="text-[11px] text-[var(--muted)] line-clamp-2">
+                <p className="text-xs text-[var(--muted)] line-clamp-2">
                   {q.description}
                 </p>
               </li>
@@ -72,12 +72,12 @@ export function WorldPanel({ world }: { world: DmWorld | null }) {
                     {n.name}
                   </span>
                   <span
-                    className={`text-[10px] uppercase tracking-wider shrink-0 ${ATTITUDE_COLOR[n.attitude]}`}
+                    className={`text-xs uppercase tracking-wider shrink-0 ${ATTITUDE_COLOR[n.attitude]}`}
                   >
                     {n.attitude}
                   </span>
                 </div>
-                <p className="text-[11px] text-[var(--muted)] line-clamp-2">
+                <p className="text-xs text-[var(--muted)] line-clamp-2">
                   {n.description}
                 </p>
               </li>
@@ -95,7 +95,7 @@ export function WorldPanel({ world }: { world: DmWorld | null }) {
                 className="leading-snug border-l-2 border-[var(--border)] pl-2"
               >
                 <p className="text-zinc-100 font-medium truncate">{l.name}</p>
-                <p className="text-[11px] text-[var(--muted)] line-clamp-2">
+                <p className="text-xs text-[var(--muted)] line-clamp-2">
                   {l.description}
                 </p>
               </li>
@@ -110,7 +110,7 @@ export function WorldPanel({ world }: { world: DmWorld | null }) {
             {world.lore.slice(0, 10).map((f) => (
               <li
                 key={f.id}
-                className="leading-snug border-l-2 border-[var(--border)] pl-2 text-[11px] text-zinc-300"
+                className="leading-snug border-l-2 border-[var(--border)] pl-2 text-xs text-zinc-300"
               >
                 {f.fact}
               </li>
@@ -134,7 +134,7 @@ function Section({
     <div>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between text-[10px] uppercase tracking-wider text-[var(--muted)] hover:text-zinc-100 transition-colors py-0.5"
+        className="w-full min-h-(--tap) flex items-center justify-between text-xs uppercase tracking-wider text-[var(--muted)] hover:text-zinc-100 transition-colors"
       >
         <span>{title}</span>
         <span className={`transition-transform ${open ? "rotate-90" : ""}`}>
