@@ -79,7 +79,7 @@ export function Sidebar({
       />
       <aside
         className={`fixed md:static inset-y-0 left-0 z-40 w-72 shrink-0 border-r border-[var(--border)]
-                    bg-[#100c08]/95 md:bg-[#100c08]/60 backdrop-blur-sm flex flex-col
+                    bg-[#100c08]/95 md:bg-[#100c08]/60 backdrop-blur-sm flex flex-col overflow-y-auto overscroll-contain
                     transition-transform duration-200 ease-out
                     ${open ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
       >
@@ -103,7 +103,7 @@ export function Sidebar({
           </div>
           <button
             onClick={onClose}
-            className="md:hidden text-[var(--muted)] hover:text-zinc-100 -mt-1"
+            className="md:hidden -mt-3 -mr-2 w-(--tap) h-(--tap) shrink-0 flex items-center justify-center rounded-(--r-md) text-[var(--muted)] hover:text-zinc-100"
             aria-label="Close sidebar"
           >
             <CloseIcon className="w-5 h-5" />
@@ -114,7 +114,7 @@ export function Sidebar({
           <button
             disabled={creating}
             onClick={() => setNewOpen(true)}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md
+            className="w-full min-h-(--tap) flex items-center justify-center gap-2 px-3 py-2 text-base font-semibold rounded-(--r-md)
                        bg-gradient-to-b from-[var(--accent)] to-amber-600 text-zinc-950
                        hover:brightness-110 shadow-[0_4px_18px_-6px_rgba(245,158,11,0.65)]
                        disabled:opacity-50 disabled:cursor-not-allowed transition-all"
@@ -131,8 +131,9 @@ export function Sidebar({
           }}
         />
 
-        <div className="flex-1 overflow-y-auto px-2 py-2">
-          <div className="px-3 mt-1 mb-1 text-[10px] uppercase tracking-wider text-[var(--muted)]">
+        {/* grow, never shrink: the whole sidebar scrolls, so the list can't be squeezed to 0 under the sheet. */}
+        <div className="grow shrink-0 px-2 py-2">
+          <div className="px-3 mt-1 mb-1 text-xs uppercase tracking-wider text-[var(--muted)]">
             Adventures
           </div>
           {loading && campaigns.length === 0 ? (
@@ -215,14 +216,14 @@ function CampaignItem({
       )}
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium truncate">{campaign.title}</p>
-        <p className="text-[11px] text-[var(--muted)] truncate">{ago}</p>
+        <p className="text-xs text-[var(--muted)] truncate">{ago}</p>
       </div>
       <button
         onClick={(e) => {
           e.stopPropagation();
           onDelete();
         }}
-        className="opacity-0 group-hover:opacity-100 text-[var(--muted)] hover:text-red-400 transition-opacity flex items-center justify-center w-8 h-8"
+        className="opacity-0 group-hover:opacity-100 text-[var(--muted)] hover:text-red-400 transition-opacity flex items-center justify-center w-(--tap) h-(--tap) -my-1 -mr-2 shrink-0"
         aria-label="Abandon adventure"
       >
         <TrashIcon className="w-3.5 h-3.5" />
@@ -254,10 +255,10 @@ function EncounterCard({ encounter }: { encounter: DmEncounter }) {
   return (
     <div className="border-t border-[var(--border)] px-4 py-3 space-y-2 text-xs">
       <div className="flex items-center justify-between">
-        <p className="text-[10px] uppercase tracking-wider text-red-300/80">
+        <p className="text-xs uppercase tracking-wider text-red-300/80">
           Encounter
         </p>
-        <span className="text-[10px] text-[var(--muted)] truncate ml-2">
+        <span className="text-xs text-[var(--muted)] truncate ml-2">
           {encounter.name}
         </span>
       </div>
@@ -281,7 +282,7 @@ function EncounterCard({ encounter }: { encounter: DmEncounter }) {
                 >
                   {e.name}
                 </span>
-                <span className="font-mono text-[10px] text-[var(--muted)] shrink-0">
+                <span className="font-mono text-xs text-[var(--muted)] shrink-0">
                   {e.is_active ? `${e.hp}/${e.max_hp}` : "down"}
                 </span>
               </div>
@@ -313,7 +314,7 @@ function UsageFooter({ usage }: { usage: UsageSummary | null }) {
     <div className="border-t border-[var(--border)]">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="w-full px-5 py-3 flex items-center justify-between text-[11px] text-[var(--muted)] hover:bg-[#1a1410]/60 transition-colors"
+        className="w-full px-5 py-3 flex items-center justify-between text-xs text-[var(--muted)] hover:bg-[#1a1410]/60 transition-colors"
       >
         <span>
           {usage.turns} {usage.turns === 1 ? "turn" : "turns"}
@@ -323,7 +324,7 @@ function UsageFooter({ usage }: { usage: UsageSummary | null }) {
         </span>
       </button>
       {open && (
-        <div className="px-5 pb-3 text-[10px] text-[var(--muted)] space-y-1">
+        <div className="px-5 pb-3 text-xs text-[var(--muted)] space-y-1">
           <Row label="input tokens" value={t.input_tokens.toLocaleString()} />
           <Row
             label="output tokens"

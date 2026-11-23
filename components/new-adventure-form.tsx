@@ -91,7 +91,7 @@ export function NewAdventureForm({
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block text-xs">
-          <span className="text-[10px] uppercase tracking-wider text-[var(--muted)] block mb-1.5">
+          <span className="text-xs font-semibold uppercase tracking-(--ls-label) text-[var(--muted)] block mb-1.5">
             Character name (optional)
           </span>
           <input
@@ -99,25 +99,25 @@ export function NewAdventureForm({
             maxLength={40}
             placeholder="Wanderer"
             onChange={(e) => setName(e.target.value)}
-            className="w-full bg-zinc-900/60 border border-[var(--border)] rounded-md px-3 py-2 text-sm text-zinc-100
+            className="w-full min-h-(--tap) bg-zinc-900/60 border border-[var(--border)] rounded-(--r-sm) px-3 py-2 text-base text-zinc-100
                        outline-none focus:border-[var(--accent)]/50"
           />
         </label>
         <div>
-          <span className="text-[10px] uppercase tracking-wider text-[var(--muted)] block mb-1.5">
+          <span className="text-xs font-semibold uppercase tracking-(--ls-label) text-[var(--muted)] block mb-1.5">
             Class
           </span>
           <ClassPicker value={cls} onChange={setCls} />
-          <p className="mt-1.5 text-[11px] text-[var(--muted)] leading-snug">
+          <p className="mt-1.5 text-xs text-[var(--muted)] leading-snug">
             {BLURBS[cls]}
           </p>
         </div>
       </div>
 
       <label className="block text-xs">
-        <span className="text-[10px] uppercase tracking-wider text-[var(--muted)] flex items-center justify-between mb-1.5">
+        <span className="text-xs font-semibold uppercase tracking-(--ls-label) text-[var(--muted)] flex items-baseline justify-between gap-3 mb-1.5">
           <span>Starting scenario (optional)</span>
-          <span className="text-[9px] normal-case font-normal italic">
+          <span className="hidden sm:inline normal-case font-normal italic tracking-normal text-right">
             Leave blank for a foggy forest at dusk
           </span>
         </span>
@@ -127,15 +127,15 @@ export function NewAdventureForm({
           rows={3}
           maxLength={1000}
           placeholder="You wake up in the burning hold of a slaver ship…"
-          className="w-full resize-none bg-zinc-900/60 border border-[var(--border)] rounded-md px-3 py-2 text-sm text-zinc-100
+          className="w-full resize-none max-sm:h-17 bg-zinc-900/60 border border-[var(--border)] rounded-(--r-sm) px-3 py-2 text-base text-zinc-100
                      outline-none focus:border-[var(--accent)]/50"
         />
       </label>
 
       <label className="block text-xs">
-        <span className="text-[10px] uppercase tracking-wider text-[var(--muted)] flex items-center justify-between mb-1.5">
+        <span className="text-xs font-semibold uppercase tracking-(--ls-label) text-[var(--muted)] flex items-baseline justify-between gap-3 mb-1.5">
           <span>Character backstory (optional)</span>
-          <span className="text-[9px] normal-case font-normal italic">
+          <span className="hidden sm:inline normal-case font-normal italic tracking-normal text-right">
             What the DM should know about you
           </span>
         </span>
@@ -145,7 +145,7 @@ export function NewAdventureForm({
           rows={3}
           maxLength={1000}
           placeholder="My family was killed by the Iron Magi when I was nine. I've been hunting them ever since."
-          className="w-full resize-none bg-zinc-900/60 border border-[var(--border)] rounded-md px-3 py-2 text-sm text-zinc-100
+          className="w-full resize-none max-sm:h-17 bg-zinc-900/60 border border-[var(--border)] rounded-(--r-sm) px-3 py-2 text-base text-zinc-100
                      outline-none focus:border-[var(--accent)]/50"
         />
       </label>
@@ -157,7 +157,7 @@ export function NewAdventureForm({
       {!inline && (
         <button
           onClick={onClose}
-          className="px-3.5 py-1.5 text-sm rounded-md border border-[var(--border)] text-zinc-200 hover:bg-[#1a1410]/60 transition-colors"
+          className="min-h-(--tap) px-5 text-base font-semibold rounded-(--r-md) border border-[var(--border)] text-zinc-200 hover:bg-[#1a1410]/60 transition-colors"
         >
           Cancel
         </button>
@@ -165,7 +165,7 @@ export function NewAdventureForm({
       <button
         disabled={submitting}
         onClick={submit}
-        className="px-4 py-2 text-sm rounded-md font-medium bg-gradient-to-b from-[var(--accent)] to-amber-600 text-zinc-950
+        className="max-sm:flex-1 min-h-(--tap) px-5 whitespace-nowrap text-base rounded-(--r-md) font-semibold bg-gradient-to-b from-[var(--accent)] to-amber-600 text-zinc-950
                    hover:brightness-110 shadow-[0_4px_18px_-6px_rgba(245,158,11,0.65)]
                    disabled:opacity-50 transition-all"
       >
@@ -176,17 +176,17 @@ export function NewAdventureForm({
 
   if (inline) {
     return (
-      <div className="w-full max-w-xl mx-auto rounded-2xl border border-[var(--border)] bg-[#100c08]/80 backdrop-blur-sm
+      <div className="w-full max-w-xl mx-auto rounded-(--r-lg) border border-[var(--border)] bg-[#100c08]/80 backdrop-blur-sm
                       shadow-[0_20px_60px_-10px_rgba(0,0,0,0.7)] overflow-hidden">
         <span className="pointer-events-none block h-px w-full bg-gradient-to-r from-transparent via-[var(--accent)]/60 to-transparent" />
-        <div className="px-6 py-5 border-b border-[var(--border)]">
-          <h2 className="text-base font-semibold">{title}</h2>
-          <p className="mt-1 text-xs text-[var(--muted)] leading-relaxed">
+        <div className="p-(--pad-card) border-b border-[var(--border)]">
+          <h2 className="text-xl leading-(--lh-head) font-semibold">{title}</h2>
+          <p className="mt-1 text-sm text-[var(--muted)] leading-snug">
             {subtitle}
           </p>
         </div>
-        <div className="px-6 py-5">{body}</div>
-        <div className="px-6 py-4 border-t border-[var(--border)] bg-[#1a1410]/40">
+        <div className="p-(--pad-card)">{body}</div>
+        <div className="px-(--pad-card) py-3 border-t border-[var(--border)] bg-[#1a1410]/40">
           {footer}
         </div>
       </div>
@@ -207,26 +207,26 @@ export function NewAdventureForm({
       />
       <div
         className="relative w-[min(560px,calc(100vw-2rem))] max-h-[calc(100dvh-2rem)] overflow-y-auto
-                   rounded-2xl border border-[var(--border)] bg-[#100c08]/95
+                   rounded-(--r-lg) border border-[var(--border)] bg-[#100c08]/95
                    shadow-[0_20px_60px_-10px_rgba(0,0,0,0.7)]"
         onClick={(e) => e.stopPropagation()}
       >
         <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)]/60 to-transparent" />
-        <header className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
-          <div>
-            <h2 className="text-sm font-semibold">{title}</h2>
-            <p className="mt-0.5 text-[11px] text-[var(--muted)]">{subtitle}</p>
+        <header className="flex items-center justify-between gap-2 pl-(--pad-card) pr-2 py-2 border-b border-[var(--border)]">
+          <div className="py-2">
+            <h2 className="text-base font-semibold">{title}</h2>
+            <p className="mt-0.5 text-xs text-[var(--muted)]">{subtitle}</p>
           </div>
           <button
             onClick={onClose}
-            className="text-[var(--muted)] hover:text-zinc-100"
+            className="shrink-0 w-(--tap) h-(--tap) flex items-center justify-center rounded-(--r-md) text-[var(--muted)] hover:text-zinc-100"
             aria-label="Close"
           >
             <CloseIcon className="w-4 h-4" />
           </button>
         </header>
-        <div className="px-5 py-4">{body}</div>
-        <div className="px-5 py-3 border-t border-[var(--border)] bg-[#1a1410]/40">
+        <div className="p-(--pad-card)">{body}</div>
+        <div className="px-(--pad-card) py-3 border-t border-[var(--border)] bg-[#1a1410]/40">
           {footer}
         </div>
       </div>
@@ -268,7 +268,7 @@ function ClassPicker({
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={`w-full flex items-center justify-between bg-zinc-900/60 border rounded-md px-3 py-2 text-sm text-zinc-100
+        className={`w-full min-h-(--tap) flex items-center justify-between bg-zinc-900/60 border rounded-(--r-sm) px-3 py-2 text-base text-zinc-100
                     outline-none transition-colors ${
                       open
                         ? "border-[var(--accent)]/50"
@@ -283,7 +283,7 @@ function ClassPicker({
       {open && (
         <ul
           role="listbox"
-          className="absolute top-full left-0 right-0 mt-1 rounded-md border border-[var(--border)]
+          className="absolute top-full left-0 right-0 mt-1 rounded-(--r-sm) border border-[var(--border)]
                      bg-[#100c08]/95 backdrop-blur-sm overflow-hidden z-20
                      shadow-[0_20px_60px_-10px_rgba(0,0,0,0.7)]"
         >
@@ -298,7 +298,7 @@ function ClassPicker({
                     onChange(c);
                     setOpen(false);
                   }}
-                  className={`w-full text-left px-3 py-2 transition-colors ${
+                  className={`w-full min-h-(--tap) text-left px-3 py-2 transition-colors ${
                     selected
                       ? "bg-[var(--accent)]/[0.10]"
                       : "hover:bg-[var(--accent)]/[0.06]"
@@ -311,7 +311,7 @@ function ClassPicker({
                   >
                     {c}
                   </span>
-                  <span className="block text-[10px] text-[var(--muted)] leading-snug mt-0.5">
+                  <span className="block text-xs text-[var(--muted)] leading-snug mt-0.5">
                     {BLURBS[c]}
                   </span>
                 </button>
