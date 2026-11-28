@@ -1,5 +1,5 @@
 import "server-only";
-import type Anthropic from "@anthropic-ai/sdk";
+import { replyText } from "@/lib/reply-text";
 import { anthropic, DM_MODEL } from "@/lib/dm";
 
 const SYSTEM = `You write the opening narration of a text adventure. Convert the player's scenario sketch into exactly 2–3 sentences of vivid second-person present-tense narration that drops the player into the scene.
@@ -29,11 +29,7 @@ export async function generateOpeningNarration(
       system: SYSTEM,
       messages: [{ role: "user", content: scenario.trim() }],
     });
-    const text = res.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("")
-      .trim();
+    const text = replyText(res.content);
     return text || scenario.trim();
   } catch {
     return scenario.trim();

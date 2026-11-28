@@ -1,5 +1,5 @@
 import "server-only";
-import type Anthropic from "@anthropic-ai/sdk";
+import { replyText } from "@/lib/reply-text";
 import { anthropic, DM_MODEL } from "@/lib/dm";
 import { db, type DmCampaign } from "@/lib/db";
 
@@ -87,11 +87,7 @@ export async function summarizeCampaignIfNeeded(
       },
     ],
   });
-  const text = res.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("")
-    .trim();
+  const text = replyText(res.content);
   if (!text) return { summarized: false };
 
   const cursor = toCompress[toCompress.length - 1].id;
