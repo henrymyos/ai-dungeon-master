@@ -1,5 +1,5 @@
 import "server-only";
-import type Anthropic from "@anthropic-ai/sdk";
+import { replyJson } from "@/lib/reply-text";
 import { anthropic, DM_MODEL } from "@/lib/dm";
 import type { StoryArc } from "@/lib/db";
 
@@ -38,13 +38,7 @@ export async function generateStoryArc(
     ],
   });
 
-  const raw = res.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("")
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
+  const raw = replyJson(res.content);
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as StoryArc;
